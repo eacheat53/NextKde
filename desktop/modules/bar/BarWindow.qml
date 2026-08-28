@@ -2,9 +2,11 @@ import Quickshell
 import Quickshell.Wayland
 import QtQuick
 import qs.desktop.modules.dock
+import qs.desktop.modules.common
+import qs.desktop.modules.applauncher
 
 // One concrete top Bar surface. Its content is shared with the optional
-// unified Dock host; this file owns only layer-shell geometry.
+// unified Dock host; this file owns layer-shell geometry and auto-hide.
 PanelWindow {
     id: root
 
@@ -15,10 +17,26 @@ PanelWindow {
     exclusionMode: ExclusionMode.Normal
     WlrLayershell.layer: WlrLayer.Top
     implicitHeight: ConfigService.barHeight
-    // Hiding content is insufficient: layer-shell's exclusive zone is what
-    // makes maximised windows leave a strip at the top. Commit zero while the
-    // Bar is hosted by Dock, then unmap the visual surface.
-    exclusiveZone: root.barEnabled ? implicitHeight : 0
+
+    // ── Auto-hide controller ──
+    BarAutoHideController {
+        id: hide
+        mode: AppearanceConfigService.barVisibilityMode
+        configReady: AppearanceConfigService.ready
+        windowDataReady: WindowService.providerReady
+        targetScreen: root.screen
+        barHeight: root.implicitHeight
+        edgeMargin: 15
+        pointerInsideBar: contentHoverHandler.hovered
+        popupOpen: barContentLoader.item?.statusArea?.anyPanelOpen ?? false
+        launcherOpen: AppLauncherService.open
+    }
+
+    // Only "always" mode reserves a permanent top workspace strip.
+    // In "smart" or "persistent" modes, exclusiveZone stays at 0 so
+    // maximised windows extend to the top of the screen.
+    exclusiveZone: (AppearanceConfigService.barVisibilityMode === "always" && root.barEnabled)
+        ? implicitHeight : 0
     visible: root.barEnabled
 
     anchors {
@@ -32,25 +50,98 @@ PanelWindow {
         right: 15
     }
 
-    Loader {
+    // ── Visual Bar content ──
+    Item {
+        id: barWrapper
         anchors.fill: parent
-        active: root.barEnabled
-        sourceComponent: Component {
-            Item {
-                BarDateStatus {
-                    anchors {
-                        left: parent.left
-                        verticalCenter: parent.verticalCenter
-                    }
-                }
+        y: hide.offsetY
+        opacity: hide.barOpacity
+        visible: root.barEnabled && hide.revealProgress > 0.001
 
-                BarStatusArea {
-                    anchors {
-                        right: parent.right
-                        verticalCenter: parent.verticalCenter
+        HoverHandler {
+            id: contentHoverHandler
+        }
+
+        Loader {
+            id: barContentLoader
+            anchors.fill: parent
+            active: root.barEnabled
+            sourceComponent: Component {
+                Item {
+                    id: barContentItem
+                    readonly property alias statusArea: barStatusArea
+
+                    BarDateStatus {
+                        anchors {
+                            left: parent.left
+                            verticalCenter: parent.verticalCenter
+                        }
+                    }
+
+                    BarStatusArea {
+                        id: barStatusArea
+                        anchors {
+                            right: parent.right
+                            verticalCenter: parent.verticalCenter
+                        }
                     }
                 }
             }
         }
+    }
+
+    // ── Touch-top invisible trigger ──
+    // A 2px hit area at the screen top to reveal Bar when hovered in hide modes.
+    Item {
+        id: topTriggerArea
+        anchors {
+            top: parent.top
+            left: parent.left
+            right: parent.right
+        }
+        height: 2
+        visible: hide.handleActive
+
+        HoverHandler {
+            id: topHoverHandler
+            enabled: hide.handleActive
+            onHoveredChanged: {
+                if (hovered) {
+                    hide.handleEntered()
+                } else {
+                    hide.handleExited()
+                }
+            }
+        }
+
+        TapHandler {
+            enabled: hide.handleActive
+            onTapped: hide.handleClicked()
+        }
+    }
+
+    // Input mask mirror for visual content and top trigger.
+    Item {
+        id: barHitRegion
+        x: 0
+        y: hide.offsetY
+        width: root.width
+        height: root.height
+        visible: false
+    }
+
+    Item {
+        id: topHitRegion
+        x: 0
+        y: 0
+        width: root.width
+        height: hide.handleActive ? 2 : 0
+        visible: false
+    }
+
+    // Shape the input region so transparent background passes clicks through.
+    mask: Region {
+        Region { item: barHitRegion }
+        Region { item: topHitRegion }
     }
 }
