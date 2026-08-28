@@ -328,6 +328,10 @@ ApplicationWindow {
             return 0
         }
 
+        property int barVisibilityModeIndex: 0
+        property bool barIntegratedWithDock: false
+        readonly property var barVisibilityModes: ["always", "smart", "persistent"]
+
         function applyState(state) {
             if (!state || state.baseHeight === undefined)
                 return
@@ -341,6 +345,13 @@ ApplicationWindow {
             iconOpacityDirty = false
             layoutDirty = false
             errorText = ""
+        }
+
+        function applyAppearanceState(state) {
+            if (!state)
+                return
+            barVisibilityModeIndex = visibilityModeIndexFromString(state.barVisibilityMode)
+            barIntegratedWithDock = Boolean(state.barIntegratedWithDock)
         }
 
         function savePosition(index) {
@@ -378,6 +389,23 @@ ApplicationWindow {
                 errorText = bridge.lastError
         }
 
+        function saveBarVisibilityMode(index) {
+            if (!bridge)
+                return
+            const mode = barVisibilityModes[index]
+            applyAppearanceState(bridge.updateBarVisibilityMode(mode))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        function setBarIntegratedWithDock(enabled) {
+            if (!bridge)
+                return
+            applyAppearanceState(bridge.updateBarIntegratedWithDock(enabled))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
         function applyTintPreset(index) {
             saveTintColor(tintPresets[index].color)
         }
@@ -388,6 +416,10 @@ ApplicationWindow {
                 return
             }
             applyState(bridge.dockSnapshot())
+            applyAppearanceState(bridge.appearanceSnapshot())
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
             if (bridge.lastError)
                 errorText = bridge.lastError
         }
@@ -491,9 +523,27 @@ ApplicationWindow {
                     color: theme.separator
                 }
 
+        Text {
+            text: "DOCK 程序栏".toUpperCase()
+            color: theme.secondaryText
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            Layout.leftMargin: 13
+            Layout.topMargin: 14
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            color: theme.card
+            radius: 18
+            implicitHeight: 111
+
+            Column {
+                anchors.fill: parent
+
                 Item {
                     width: parent.width
-                    height: 48
+                    height: 54
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 16
@@ -520,11 +570,51 @@ ApplicationWindow {
                         }
                     }
                 }
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 53
+                    height: 1
+                    color: theme.separator
+                }
+
+                Item {
+                    width: parent.width
+                    height: 54
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "◉"; tint: "#0a84ff" }
+                        Text {
+                            text: "Dock 显示方式"
+                            color: theme.primaryText
+                            font.pixelSize: 14
+                            font.weight: Font.DemiBold
+                        }
+                        Item { Layout.fillWidth: true }
+                        SettingsNavBar {
+                            id: visibilityNavBar
+                            model: [
+                                { id: "always", label: "始终显示" },
+                                { id: "smart", label: "智能隐藏" },
+                                { id: "persistent", label: "持续隐藏" }
+                            ]
+                            itemWidthOverride: 76
+                            currentIndex: dockPage.visibilityModeIndex
+                            onSelectionChanged: function(index) {
+                                dockPage.saveVisibilityMode(index)
+                            }
+                        }
+                    }
+                }
             }
         }
 
         Text {
-            text: "Dock 显示".toUpperCase()
+            text: "TOP BAR 顶部状态栏".toUpperCase()
             color: theme.secondaryText
             font.pixelSize: 12
             font.weight: Font.DemiBold
@@ -536,7 +626,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             color: theme.card
             radius: 18
-            implicitHeight: 54
+            implicitHeight: 119
 
             Column {
                 anchors.fill: parent
@@ -549,41 +639,72 @@ ApplicationWindow {
                         anchors.leftMargin: 16
                         anchors.rightMargin: 16
                         spacing: 12
-                        SettingIcon { symbol: "◉"; tint: "#0a84ff" }
+                        SettingIcon { symbol: "◉"; tint: "#5856d6" }
                         Text {
-                            text: "显示方式"
+                            text: "Bar 显示方式"
                             color: theme.primaryText
-                            font.pixelSize: 15
+                            font.pixelSize: 14
                             font.weight: Font.DemiBold
                         }
                         Item { Layout.fillWidth: true }
                         SettingsNavBar {
-                            id: visibilityNavBar
+                            id: barVisibilityInDockPageNavBar
                             model: [
                                 { id: "always", label: "始终显示" },
                                 { id: "smart", label: "智能隐藏" },
                                 { id: "persistent", label: "持续隐藏" }
                             ]
-                            // Text-only + "tiny", matching the Dock 颜色 bar's
-                            // height so the two segmented controls read as one
-                            // consistent set — no stacked icon+label to overflow
-                            // the pill.
-                            // 4-char labels are wider than the tiny preset's 56px
-                            // item; give each item a little more room (height and
-                            // pill stay identical to the Dock 颜色 bar).
                             itemWidthOverride: 76
-                            currentIndex: dockPage.visibilityModeIndex
-
-                            Connections {
-                                target: visibilityNavBar
-                                function onSelectionChanged(index) {
-                                    dockPage.saveVisibilityMode(index)
-                                }
+                            currentIndex: dockPage.barVisibilityModeIndex
+                            onSelectionChanged: function(index) {
+                                dockPage.saveBarVisibilityMode(index)
                             }
                         }
                     }
                 }
 
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 53
+                    height: 1
+                    color: theme.separator
+                }
+
+                Item {
+                    width: parent.width
+                    height: 64
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "⇲"; tint: "#ff9f0a" }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "Bar 融入 Dock"
+                                color: theme.primaryText
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                            }
+                            Text {
+                                text: "仅在 Dock 位于底部时生效；侧边 Dock 自动保留顶部 Bar"
+                                color: theme.secondaryText
+                                font.pixelSize: 11
+                            }
+                        }
+                        LiquidControls.LiquidGlassSwitch {
+                            checked: dockPage.barIntegratedWithDock
+                            accentColor: "#0a84ff"
+                            trackColor: theme.divider
+                            onToggled: function(checked) {
+                                dockPage.setBarIntegratedWithDock(checked)
+                            }
+                        }
+                    }
+                }
             }
         }
 
