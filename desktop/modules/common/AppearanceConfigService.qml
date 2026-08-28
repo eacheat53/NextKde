@@ -21,11 +21,17 @@ QtObject {
     // so upgrading an existing installation does not unexpectedly reshape it.
     property string shellStyle: "macos"
     property bool barIntegratedWithDock: false
+    property string barVisibilityMode: "always" // "always" | "smart" | "persistent"
     property bool ready: false
 
     function isValidShellStyle(value) {
         return value === "windows12" || value === "macos"
             || value === "material"
+    }
+
+    function isValidBarVisibilityMode(value) {
+        return value === "always" || value === "smart"
+            || value === "persistent"
     }
 
     function _normalized(value) {
@@ -71,6 +77,15 @@ QtObject {
         if (barIntegratedWithDock === value)
             return false
         barIntegratedWithDock = value
+        saveTimer.restart()
+        return true
+    }
+
+    function updateBarVisibilityMode(rawMode) {
+        const mode = String(rawMode)
+        if (!isValidBarVisibilityMode(mode) || barVisibilityMode === mode)
+            return false
+        barVisibilityMode = mode
         saveTimer.restart()
         return true
     }
@@ -122,11 +137,12 @@ QtObject {
 
     function _save() {
         const payload = JSON.stringify({
-            version: 3,
+            version: 4,
             blurStrength: service.blurStrength,
             liquidStrength: service.liquidStrength,
             shellStyle: service.shellStyle,
             barIntegratedWithDock: service.barIntegratedWithDock,
+            barVisibilityMode: service.barVisibilityMode,
         }, null, 2)
         const process = _makeProcess([
             "sh", "-c",
@@ -142,7 +158,6 @@ QtObject {
                 console.warn("[AppearanceConfig] save failed code=" + code
                     + " stderr=" + (process.stderr?.text ?? ""))
             }
-            process.destroy()
         })
         process.running = true
     }
@@ -193,6 +208,7 @@ QtObject {
                     const style = String(object.shellStyle ?? "")
                     const hasBarIntegration = typeof object.barIntegratedWithDock
                         === "boolean"
+                    const barVisibility = String(object.barVisibilityMode ?? "")
                     if (Number.isFinite(blur))
                         service.blurStrength = blur
                     if (Number.isFinite(liquid))
@@ -201,12 +217,16 @@ QtObject {
                         service.shellStyle = style
                     if (hasBarIntegration)
                         service.barIntegratedWithDock = object.barIntegratedWithDock
+                    if (service.isValidBarVisibilityMode(barVisibility))
+                        service.barVisibilityMode = barVisibility
                     // Schema 1 had no shellStyle; schema 2 had no Bar
-                    // integration flag. Preserve compatible defaults and
-                    // persist once so later readers always see schema 3.
-                    if (Number(object.version) !== 3
+                    // integration flag; schema 3 had no barVisibilityMode.
+                    // Preserve compatible defaults and persist once so later
+                    // readers always see schema 4.
+                    if (Number(object.version) !== 4
                             || !service.isValidShellStyle(style)
-                            || !hasBarIntegration)
+                            || !hasBarIntegration
+                            || !service.isValidBarVisibilityMode(barVisibility))
                         service.saveTimer.restart()
                 } catch (error) {
                     console.warn("[AppearanceConfig] parse error: " + error)

@@ -111,6 +111,7 @@ Item {
                 shellStyle: AppearanceConfigService.shellStyle,
                 barIntegratedWithDock:
                     AppearanceConfigService.barIntegratedWithDock,
+                barVisibilityMode: AppearanceConfigService.barVisibilityMode,
                 tokenVersion: AppearanceTokens.version,
             })
         }
@@ -132,6 +133,11 @@ Item {
 
         function updateBarIntegratedWithDock(enabled: bool): string {
             AppearanceConfigService.updateBarIntegratedWithDock(enabled)
+            return snapshot()
+        }
+
+        function updateBarVisibilityMode(mode: string): string {
+            AppearanceConfigService.updateBarVisibilityMode(mode)
             return snapshot()
         }
 
