@@ -170,7 +170,13 @@ QtObject {
             "kwriteconfig6 --file kwinrc --group Effect-blurplus --key BlurStrength \"$1\" && "
                 + "kwriteconfig6 --file kwinrc --group Effect-blurplus --key DockBlurStrength \"$1\" && "
                 + "kwriteconfig6 --file kwinrc --group Effect-blurplus --key RefractionStrength \"$2\" && "
-                + "qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.reconfigureEffect glass",
+                + "kwriteconfig6 --file kwinrc --group Effect-blur --key BlurStrength \"$1\" && "
+                + "if [ \"$(qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.isEffectLoaded glass 2>/dev/null)\" != \"true\" ]; then "
+                + "  qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.unloadEffect blur 2>/dev/null; "
+                + "  qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.loadEffect glass 2>/dev/null; "
+                + "fi; "
+                + "qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.reconfigureEffect glass 2>/dev/null || "
+                + "qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.reconfigureEffect blur 2>/dev/null",
             "appearance-glass-sync",
             String(blurLevel),
             String(refractionLevel),
