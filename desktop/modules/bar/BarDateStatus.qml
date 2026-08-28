@@ -8,7 +8,7 @@ Item {
     id: root
 
     implicitWidth: content.implicitWidth
-    implicitHeight: 24
+    implicitHeight: content.implicitHeight
 
     SystemClock {
         id: clock
@@ -17,11 +17,12 @@ Item {
 
     Row {
         id: content
-        anchors.centerIn: parent
+        anchors.verticalCenter: parent.verticalCenter
         spacing: 7
 
         Text {
             id: timeText
+            anchors.verticalCenter: parent.verticalCenter
             text: Qt.formatDateTime(clock.date, "h:mm")
             color: ThemeService.foregroundColor
             style: Text.Outline
@@ -34,6 +35,7 @@ Item {
         }
 
         Text {
+            anchors.verticalCenter: parent.verticalCenter
             text: Qt.formatDateTime(clock.date, "M月d日 dddd")
             color: ThemeService.foregroundColor
             style: Text.Outline
@@ -43,7 +45,6 @@ Item {
                 pixelSize: 14
                 weight: Font.Bold
             }
-            anchors.baseline: timeText.baseline
         }
     }
 }

@@ -119,6 +119,7 @@ AppActionService ──-> launch / pin / unpin / hide / edit requests
 
 ## 文档索引
 
+- [FunctionalArchitecture.md](docs/FunctionalArchitecture.md) - 项目全景功能架构与数据流拓扑
 - [ProjectArchitecture.md](docs/ProjectArchitecture.md) - 仓库级运行时边界与依赖方向
 - [DockArchitecture.md](docs/DockArchitecture.md) - Dock 身份/窗口/持久化/显示模式约定
 - [AppearanceArchitecture.md](docs/AppearanceArchitecture.md) - 全局外观 schema、IPC、Token 与接入规范

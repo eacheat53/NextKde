@@ -199,6 +199,7 @@ docs/           架构文档
 
 ## 文档
 
+- [功能架构](docs/FunctionalArchitecture.md)——系统全景、功能子系统与跨进程数据流
 - [项目架构](docs/ProjectArchitecture.md)——运行时边界与依赖方向
 - [Dock 架构](docs/DockArchitecture.md)——身份、窗口模型、持久化与显示模式
 - [外观架构](docs/AppearanceArchitecture.md)——schema、IPC 契约与语义 Token

@@ -68,12 +68,12 @@ PanelWindow {
         opacity: hide.barOpacity
         visible: root.barEnabled && hide.revealProgress > 0.001
 
-        EnhancedGlassSurface {
+        LiquidGlassSurface {
             id: barGlassBackground
             anchors.fill: parent
             radius: 12
             visible: AppearanceConfigService.barVisibilityMode !== "always"
-            baseColor: ThemeService.isDark ? Qt.rgba(0.08, 0.08, 0.12, 0.72) : Qt.rgba(0.95, 0.95, 0.98, 0.75)
+            baseColor: ThemeService.backgroundColor
             surfaceOpacity: 1.0
             ambientPrimary: WallpaperPaletteService.primary
             ambientSecondary: WallpaperPaletteService.secondary
