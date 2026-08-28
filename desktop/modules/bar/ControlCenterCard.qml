@@ -60,6 +60,9 @@ PanelWindow {
     // top margin off/onto the screen keeps the blur region continuously
     // submitted, so every frame - including the first - rounds the corners.
     property bool cardShown: false
+    readonly property bool effectiveShown: root.managedByCoordinator
+        ? (root.cardShown && (!root.coordinator || !root.coordinator.suspended))
+        : root.cardShown
 
     screen: root.targetScreen
     color: "transparent"
@@ -74,7 +77,7 @@ PanelWindow {
     margins {
         // Off-screen (well above the display) while hidden; the real position
         // (panel origin + this card's grid offset) when shown.
-        top: root.cardShown
+        top: root.effectiveShown
             ? (root.coordinator ? root.coordinator.panelTop + root.offsetTop : 60 + root.offsetTop)
             : -2000
         // panelRight is the distance from the control center's right edge to
