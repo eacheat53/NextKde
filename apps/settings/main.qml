@@ -420,9 +420,6 @@ ApplicationWindow {
             if (bridge.lastError)
                 errorText = bridge.lastError
         }
-            if (bridge.lastError)
-                errorText = bridge.lastError
-        }
 
         function saveLayout() {
             if (!bridge)
@@ -514,14 +511,8 @@ ApplicationWindow {
                         }
                     }
                 }
-
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.leftMargin: 53
-                    height: 1
-                    color: theme.separator
-                }
+            }
+        }
 
         Text {
             text: "DOCK 程序栏".toUpperCase()
