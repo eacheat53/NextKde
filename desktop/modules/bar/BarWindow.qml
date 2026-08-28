@@ -53,8 +53,10 @@ PanelWindow {
     // ── Visual Bar content ──
     Item {
         id: barWrapper
-        anchors.fill: parent
+        x: 0
         y: hide.offsetY
+        width: root.width
+        height: root.height
         opacity: hide.barOpacity
         visible: root.barEnabled && hide.revealProgress > 0.001
 
@@ -91,15 +93,13 @@ PanelWindow {
     }
 
     // ── Touch-top invisible trigger ──
-    // A 2px hit area at the screen top to reveal Bar when hovered in hide modes.
+    // A 8px hit area at the screen top to reveal Bar when hovered in hide modes.
     Item {
         id: topTriggerArea
-        anchors {
-            top: parent.top
-            left: parent.left
-            right: parent.right
-        }
-        height: 2
+        x: 0
+        y: 0
+        width: root.width
+        height: hide.handleActive ? 8 : 0
         visible: hide.handleActive
 
         HoverHandler {
@@ -135,7 +135,7 @@ PanelWindow {
         x: 0
         y: 0
         width: root.width
-        height: hide.handleActive ? 2 : 0
+        height: hide.handleActive ? 8 : 0
         visible: false
     }
 

@@ -46,7 +46,7 @@ Item {
         || ctl._temporaryRevealHold || ctl._handleHovered
 
     readonly property real offsetY: -(1 - ctl.revealProgress) * (ctl.barHeight + 2)
-    readonly property real barOpacity: Math.max(0.0, Math.min(1.0, 0.20 + 0.80 * ctl.revealProgress))
+    readonly property real barOpacity: Math.max(0.0, Math.min(1.0, ctl.revealProgress))
 
     property bool _temporaryRevealHold: false
     property bool _handleHovered: false
@@ -157,6 +157,10 @@ Item {
         ctl._anim.easing.type = target > ctl.revealProgress
             ? DockAnimation.smartHideRevealEasing
             : DockAnimation.smartHideHideEasing
+        if (target > ctl.revealProgress)
+            ctl._setPhase("Showing")
+        else
+            ctl._setPhase("Hiding")
         ctl._anim.start()
     }
 
@@ -205,7 +209,10 @@ Item {
         ctl._hidePendingTimer.start()
     }
 
-    function _enterHiding() { ctl._animateTo(0) }
+    function _enterHiding() {
+        ctl._setPhase("Hiding")
+        ctl._animateTo(0)
+    }
 
     function _enterShownOrHeld() {
         ctl._setPhase(ctl.policyWantsHidden ? "Held" : "Shown")
@@ -364,9 +371,9 @@ Item {
     // ────────────────────────────────────────────────────────────
     // Input plumbing
     // ────────────────────────────────────────────────────────────
-    onModeChanged: ctl._scheduleEvaluate()
-    onTargetScreenChanged: ctl._scheduleEvaluate()
-    onBarHeightChanged: ctl._scheduleEvaluate()
+    onModeChanged: { ctl._recomputeConflict(); ctl._scheduleEvaluate() }
+    onTargetScreenChanged: { ctl._recomputeConflict(); ctl._scheduleEvaluate() }
+    onBarHeightChanged: { ctl._recomputeConflict(); ctl._scheduleEvaluate() }
     onPointerInsideBarChanged: ctl._scheduleEvaluate()
     on_HandleHoveredChanged: ctl._scheduleEvaluate()
     onPopupOpenChanged: ctl._scheduleEvaluate()
@@ -379,10 +386,14 @@ Item {
         function onRevisionChanged() {
             if (ctl._recomputeConflict())
                 ctl._doEvaluate()
+            else if (ctl.mode !== "always")
+                ctl._scheduleEvaluate()
         }
         function onCurrentDesktopIdChanged() {
             if (ctl._recomputeConflict())
                 ctl._doEvaluate()
+            else if (ctl.mode !== "always")
+                ctl._scheduleEvaluate()
         }
     }
 
