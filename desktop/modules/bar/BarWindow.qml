@@ -50,6 +50,14 @@ PanelWindow {
         right: 15
     }
 
+    BackgroundEffect.blurRegion: Region {
+        RoundedBlurRegion {
+            id: barBlurRegion
+            item: barWrapper
+            radius: 12
+        }
+    }
+
     // ── Visual Bar content ──
     Item {
         id: barWrapper
@@ -60,6 +68,20 @@ PanelWindow {
         opacity: hide.barOpacity
         visible: root.barEnabled && hide.revealProgress > 0.001
 
+        EnhancedGlassSurface {
+            id: barGlassBackground
+            anchors.fill: parent
+            radius: 12
+            visible: AppearanceConfigService.barVisibilityMode !== "always"
+            baseColor: ThemeService.isDark ? Qt.rgba(0.08, 0.08, 0.12, 0.72) : Qt.rgba(0.95, 0.95, 0.98, 0.75)
+            surfaceOpacity: 1.0
+            ambientPrimary: WallpaperPaletteService.primary
+            ambientSecondary: WallpaperPaletteService.secondary
+            ambientStrength: 0.35 * AppearanceTokens.glass.ambientMultiplier
+            border.width: 1
+            border.color: ThemeService.isDark ? Qt.rgba(1, 1, 1, 0.14) : Qt.rgba(0, 0, 0, 0.10)
+        }
+
         HoverHandler {
             id: contentHoverHandler
         }
@@ -67,6 +89,8 @@ PanelWindow {
         Loader {
             id: barContentLoader
             anchors.fill: parent
+            anchors.leftMargin: (AppearanceConfigService.barVisibilityMode !== "always") ? 10 : 0
+            anchors.rightMargin: (AppearanceConfigService.barVisibilityMode !== "always") ? 10 : 0
             active: root.barEnabled
             sourceComponent: Component {
                 Item {
