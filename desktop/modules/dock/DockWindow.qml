@@ -42,6 +42,7 @@ PanelWindow {
     // edge. Anchoring only top (without bottom) would let a side surface
     // collapse to the implicit thickness and become 0-height.
     property string position: "bottom"
+    property Component leadingAccessory: null
     property Component trailingAccessory: null
     property bool clockInInfoCarousel: false
     readonly property bool vertical: root.position === "left"
@@ -153,6 +154,7 @@ PanelWindow {
             targetScreen: root.screen
             surfaceOriginX: root.surfaceGlobalX
             surfaceOriginY: root.surfaceGlobalY
+            leadingAccessory: root.leadingAccessory
             trailingAccessory: root.trailingAccessory
             clockInInfoCarousel: root.clockInInfoCarousel
         }

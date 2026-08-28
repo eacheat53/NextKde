@@ -102,9 +102,15 @@ QtObject {
                 "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null; "
                     + "printf '\\036'; bluetoothctl show 2>/dev/null; "
                     + "printf '\\036'; "
-                    + "for d in /sys/class/backlight/*; do [ -r \"$d/max_brightness\" ] || continue; "
-                    + "name=${d##*/}; current=$(cat \"$d/brightness\" 2>/dev/null); max=$(cat \"$d/max_brightness\" 2>/dev/null); "
-                    + "case \"$max\" in ''|*[!0-9]*|[0]*) ;; *) printf '%s|%s|%s' \"$name\" \"$current\" \"$max\"; break;; esac; done",
+                    + "kde_cur=$(qdbus6 org.kde.Solid.PowerManagement /org/kde/Solid/PowerManagement/Actions/BrightnessControl org.kde.Solid.PowerManagement.Actions.BrightnessControl.brightness 2>/dev/null); "
+                    + "kde_max=$(qdbus6 org.kde.Solid.PowerManagement /org/kde/Solid/PowerManagement/Actions/BrightnessControl org.kde.Solid.PowerManagement.Actions.BrightnessControl.brightnessMax 2>/dev/null); "
+                    + "if [ -n \"$kde_max\" ] && [ \"$kde_max\" -gt 0 ] 2>/dev/null; then "
+                    + "  printf 'kde|%s|%s' \"$kde_cur\" \"$kde_max\"; "
+                    + "else "
+                    + "  for d in /sys/class/backlight/*; do [ -r \"$d/max_brightness\" ] || continue; "
+                    + "    name=${d##*/}; current=$(cat \"$d/brightness\" 2>/dev/null); max=$(cat \"$d/max_brightness\" 2>/dev/null); "
+                    + "    case \"$max\" in ''|*[!0-9]*|[0]*) ;; *) printf '%s|%s|%s' \"$name\" \"$current\" \"$max\"; break;; esac; done; "
+                    + "fi",
                 "control-center-refresh"]
         })
         _refreshProcess = proc
@@ -144,24 +150,39 @@ QtObject {
         proc.running = true
     }
 
-    // Brightness changes go through logind so the session owner can write a
-    // backlight without /sys privileges. The brightness sysfs path is the only
-    // user-readable part; SetBrightness performs the privileged write.
+    // Brightness changes prioritize KDE's PowerDevil/ScreenBrightness D-Bus
+    // interfaces (supporting internal screens and external DDC/CI monitors),
+    // and fall back to logind SetBrightness for sysfs backlights.
     function setBrightness(percent) {
         const value = Math.round(Math.max(0, Math.min(100, Number(percent) || 0)))
-        if (!brightnessAvailable || brightnessChangeInProgress || !brightnessBacklightName)
+        if (!brightnessAvailable || brightnessChangeInProgress)
             return false
         brightnessChangeInProgress = true
-        // Read the maximum again at commit time so a fixed max_brightness
-        // change never writes an out-of-range value.
         const proc = processFactory.createObject(service, {
             command: ["sh", "-c",
-                "name=$1; max=$(cat \"/sys/class/backlight/$name/max_brightness\" 2>/dev/null); "
-                    + "case \"$max\" in ''|*[!0-9]*|[0]*) exit 1;; esac; "
-                    + "value=$(( ($2 * max + 50) / 100 )); "
-                    + "qdbus6 --system org.freedesktop.login1 /org/freedesktop/login1/session/auto "
-                    + "org.freedesktop.login1.Session.SetBrightness backlight \"$name\" \"$value\"",
-                "control-center-brightness", brightnessBacklightName, String(value)]
+                "target=$1; name=$2; "
+                    + "kde_max=$(qdbus6 org.kde.Solid.PowerManagement /org/kde/Solid/PowerManagement/Actions/BrightnessControl org.kde.Solid.PowerManagement.Actions.BrightnessControl.brightnessMax 2>/dev/null); "
+                    + "if [ -n \"$kde_max\" ] && [ \"$kde_max\" -gt 0 ] 2>/dev/null; then "
+                    + "  val=$(( (target * kde_max + 50) / 100 )); "
+                    + "  qdbus6 org.kde.Solid.PowerManagement /org/kde/Solid/PowerManagement/Actions/BrightnessControl org.kde.Solid.PowerManagement.Actions.BrightnessControl.setBrightness \"$val\" 2>/dev/null; "
+                    + "  displays=$(qdbus6 org.kde.ScreenBrightness /org/kde/ScreenBrightness org.kde.ScreenBrightness.DisplaysDBusNames 2>/dev/null); "
+                    + "  for d in $displays; do "
+                    + "    p=\"/org/kde/ScreenBrightness/${d#/org/kde/ScreenBrightness/}\"; p=\"/org/kde/ScreenBrightness/${p#/}\"; "
+                    + "    d_max=$(qdbus6 org.kde.ScreenBrightness \"$p\" org.kde.ScreenBrightness.Display.MaxBrightness 2>/dev/null); "
+                    + "    if [ -n \"$d_max\" ] && [ \"$d_max\" -gt 0 ] 2>/dev/null; then "
+                    + "      d_val=$(( (target * d_max + 50) / 100 )); "
+                    + "      qdbus6 org.kde.ScreenBrightness \"$p\" org.kde.ScreenBrightness.Display.SetBrightness \"$d_val\" 0 2>/dev/null || true; "
+                    + "    fi; "
+                    + "  done; "
+                    + "  exit 0; "
+                    + "fi; "
+                    + "if [ -n \"$name\" ] && [ \"$name\" != \"kde\" ]; then "
+                    + "  max=$(cat \"/sys/class/backlight/$name/max_brightness\" 2>/dev/null); "
+                    + "  case \"$max\" in ''|*[!0-9]*|[0]*) exit 1;; esac; "
+                    + "  val=$(( (target * max + 50) / 100 )); "
+                    + "  qdbus6 --system org.freedesktop.login1 /org/freedesktop/login1/session/auto org.freedesktop.login1.Session.SetBrightness backlight \"$name\" \"$val\"; "
+                    + "fi",
+                "control-center-brightness", String(value), brightnessBacklightName]
         })
         proc.exited.connect(function(writeCode) {
             service.brightnessChangeInProgress = false
