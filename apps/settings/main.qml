@@ -1080,6 +1080,8 @@ ApplicationWindow {
             ? settingsBridge : null
         property string shellStyle: "macos"
         property bool barIntegratedWithDock: false
+        property int barVisibilityModeIndex: 0
+        readonly property var barVisibilityModes: ["always", "smart", "persistent"]
         property string errorText: ""
         readonly property var styles: [
             {
@@ -1107,11 +1109,17 @@ ApplicationWindow {
                 || style === "material"
         }
 
+        function barVisibilityModeIndexFromString(mode) {
+            const idx = barVisibilityModes.indexOf(mode)
+            return idx >= 0 ? idx : 0
+        }
+
         function applyState(state) {
             if (!state || !isValidStyle(state.shellStyle))
                 return
             shellStyle = state.shellStyle
             barIntegratedWithDock = Boolean(state.barIntegratedWithDock)
+            barVisibilityModeIndex = barVisibilityModeIndexFromString(state.barVisibilityMode)
             errorText = ""
         }
 
@@ -1141,6 +1149,15 @@ ApplicationWindow {
                 return
             }
             applyState(bridge.updateBarIntegratedWithDock(enabled))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        function saveBarVisibilityMode(index) {
+            if (!bridge)
+                return
+            const mode = barVisibilityModes[index]
+            applyState(bridge.updateBarVisibilityMode(mode))
             if (bridge.lastError)
                 errorText = bridge.lastError
         }
@@ -1318,37 +1335,85 @@ ApplicationWindow {
 
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 64
+            implicitHeight: 119
             radius: 18
             color: theme.card
 
-            RowLayout {
+            Column {
                 anchors.fill: parent
-                anchors.leftMargin: 16
-                anchors.rightMargin: 16
-                spacing: 12
-                SettingIcon { symbol: "⇲"; tint: "#ff9f0a" }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 2
-                    Text {
-                        text: "Bar 融入 Dock"
-                        color: theme.primaryText
-                        font.pixelSize: 14
-                        font.weight: Font.DemiBold
-                    }
-                    Text {
-                        text: "仅在 Dock 位于底部时生效；侧边 Dock 自动保留顶部 Bar"
-                        color: theme.secondaryText
-                        font.pixelSize: 11
+
+                Item {
+                    width: parent.width
+                    height: 54
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "◉"; tint: "#0a84ff" }
+                        Text {
+                            text: "Bar 显示方式"
+                            color: theme.primaryText
+                            font.pixelSize: 15
+                            font.weight: Font.DemiBold
+                        }
+                        Item { Layout.fillWidth: true }
+                        SettingsNavBar {
+                            id: barVisibilityNavBar
+                            model: [
+                                { id: "always", label: "始终显示" },
+                                { id: "smart", label: "智能隐藏" },
+                                { id: "persistent", label: "持续隐藏" }
+                            ]
+                            itemWidthOverride: 76
+                            currentIndex: themePage.barVisibilityModeIndex
+                            onSelectionChanged: function(index) {
+                                themePage.saveBarVisibilityMode(index)
+                            }
+                        }
                     }
                 }
-                LiquidControls.LiquidGlassSwitch {
-                    checked: themePage.barIntegratedWithDock
-                    accentColor: "#0a84ff"
-                    trackColor: theme.divider
-                    onToggled: function(checked) {
-                        themePage.setBarIntegratedWithDock(checked)
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 53
+                    height: 1
+                    color: theme.separator
+                }
+
+                Item {
+                    width: parent.width
+                    height: 64
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "⇲"; tint: "#ff9f0a" }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "Bar 融入 Dock"
+                                color: theme.primaryText
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                            }
+                            Text {
+                                text: "仅在 Dock 位于底部时生效；侧边 Dock 自动保留顶部 Bar"
+                                color: theme.secondaryText
+                                font.pixelSize: 11
+                            }
+                        }
+                        LiquidControls.LiquidGlassSwitch {
+                            checked: themePage.barIntegratedWithDock
+                            accentColor: "#0a84ff"
+                            trackColor: theme.divider
+                            onToggled: function(checked) {
+                                themePage.setBarIntegratedWithDock(checked)
+                            }
+                        }
                     }
                 }
             }

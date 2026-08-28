@@ -71,6 +71,11 @@ public:
             enabled ? QStringLiteral("true") : QStringLiteral("false")}));
     }
 
+    Q_INVOKABLE QVariantMap updateBarVisibilityMode(const QString &mode) {
+        return appearanceSnapshotFromReply(callAppearance({
+            QStringLiteral("updateBarVisibilityMode"), mode}));
+    }
+
     Q_INVOKABLE QVariantMap resetAppearanceStrengths() {
         return appearanceSnapshotFromReply(callAppearance({QStringLiteral("resetStrengths")}));
     }
@@ -167,6 +172,8 @@ private:
             return {};
         }
 
+        const QString barVisibility = object.value(QStringLiteral("barVisibilityMode")).toString(QStringLiteral("always"));
+
         setLastError({});
         return {
             {QStringLiteral("blurStrength"), object.value(QStringLiteral("blurStrength")).toDouble()},
@@ -174,6 +181,8 @@ private:
             {QStringLiteral("shellStyle"), object.value(QStringLiteral("shellStyle")).toString()},
             {QStringLiteral("barIntegratedWithDock"),
                 object.value(QStringLiteral("barIntegratedWithDock")).toBool()},
+            {QStringLiteral("barVisibilityMode"),
+                barVisibility.isEmpty() ? QStringLiteral("always") : barVisibility},
             {QStringLiteral("tokenVersion"), object.value(QStringLiteral("tokenVersion")).toInt()},
         };
     }
