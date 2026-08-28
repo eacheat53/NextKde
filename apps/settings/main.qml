@@ -987,12 +987,39 @@ ApplicationWindow {
                 errorText = bridge.lastError
         }
 
+        Timer {
+            id: liveBlurDebounce
+            interval: 60
+            repeat: false
+            onTriggered: {
+                if (displayPage.bridge && displayPage.blurDirty) {
+                    displayPage.bridge.updateBlurStrength(displayPage.blurStrength)
+                }
+            }
+        }
+
+        Timer {
+            id: liveLiquidDebounce
+            interval: 60
+            repeat: false
+            onTriggered: {
+                if (displayPage.bridge && displayPage.liquidDirty) {
+                    displayPage.bridge.updateLiquidStrength(displayPage.liquidStrength)
+                }
+            }
+        }
+
         function previewBlur(value) {
-            blurStrength = Math.max(0, Math.min(1, value))
+            const clamped = Math.max(0, Math.min(1, value))
+            if (Math.abs(blurStrength - clamped) < 0.005)
+                return
+            blurStrength = clamped
             blurDirty = true
+            liveBlurDebounce.restart()
         }
 
         function commitBlur() {
+            liveBlurDebounce.stop()
             if (!blurDirty || !bridge)
                 return
             blurDirty = false
@@ -1002,11 +1029,16 @@ ApplicationWindow {
         }
 
         function previewLiquid(value) {
-            liquidStrength = Math.max(0, Math.min(1, value))
+            const clamped = Math.max(0, Math.min(1, value))
+            if (Math.abs(liquidStrength - clamped) < 0.005)
+                return
+            liquidStrength = clamped
             liquidDirty = true
+            liveLiquidDebounce.restart()
         }
 
         function commitLiquid() {
+            liveLiquidDebounce.stop()
             if (!liquidDirty || !bridge)
                 return
             liquidDirty = false
