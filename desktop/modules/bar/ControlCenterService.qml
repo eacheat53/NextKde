@@ -1,6 +1,7 @@
 pragma Singleton
 
 import QtQuick
+import Quickshell
 import Quickshell.Io
 
 // Shared adapter for the first real Control Centre controls. Presentation
@@ -87,7 +88,12 @@ QtObject {
         function onModelReset() { service.rebuildHistoryGroups() }
     }
     property bool screenshotInProgress: false
-    property bool logoutInProgress: false
+    property bool sessionActionInProgress: false
+    property alias logoutInProgress: service.sessionActionInProgress
+    property string lastSessionError: ""
+    property string currentUserName: Quickshell.env("USER") || "用户"
+    property bool canSuspend: true
+    property bool canHibernate: false
     // The control center panel is owned by BarWindow, so a global shortcut
     // cannot toggle it directly. BarWindow listens for this request; the
     // service stays the intent channel (same pattern as AppActionService).
@@ -343,18 +349,134 @@ QtObject {
         return true
     }
 
-    // This command runs only after an explicit click on the logout shortcut.
-    // Terminating the current logind session returns the user to their display
-    // manager without trying to guess a compositor-specific exit command.
-    function logoutCurrentSession() {
-        if (logoutInProgress)
+    function lockSession() {
+        if (sessionActionInProgress)
             return false
-        logoutInProgress = true
+        sessionActionInProgress = true
+        lastSessionError = ""
         const proc = processFactory.createObject(service, {
-            command: ["sh", "-c", "loginctl terminate-session \"$XDG_SESSION_ID\""]
+            command: ["sh", "-c", "loginctl lock-session 2>/dev/null || qdbus6 org.freedesktop.ScreenSaver /ScreenSaver org.freedesktop.ScreenSaver.Lock 2>/dev/null"]
         })
-        proc.exited.connect(function() {
-            service.logoutInProgress = false
+        proc.exited.connect(function(code) {
+            service.sessionActionInProgress = false
+            if (code !== 0) {
+                service.lastSessionError = "锁屏失败"
+            }
+            proc.destroy()
+        })
+        proc.running = true
+        return true
+    }
+
+    function suspendSystem() {
+        if (sessionActionInProgress)
+            return false
+        sessionActionInProgress = true
+        lastSessionError = ""
+        const proc = processFactory.createObject(service, {
+            command: ["sh", "-c", "systemctl suspend 2>/dev/null || loginctl suspend 2>/dev/null || qdbus6 org.freedesktop.PowerManagement /org/freedesktop/PowerManagement org.freedesktop.PowerManagement.Suspend 2>/dev/null"]
+        })
+        proc.exited.connect(function(code) {
+            service.sessionActionInProgress = false
+            if (code !== 0) {
+                service.lastSessionError = "睡眠操作失败"
+            }
+            proc.destroy()
+        })
+        proc.running = true
+        return true
+    }
+
+    function hibernateSystem() {
+        if (sessionActionInProgress)
+            return false
+        sessionActionInProgress = true
+        lastSessionError = ""
+        const proc = processFactory.createObject(service, {
+            command: ["sh", "-c", "systemctl hibernate 2>/dev/null || loginctl hibernate 2>/dev/null || qdbus6 org.freedesktop.PowerManagement /org/freedesktop/PowerManagement org.freedesktop.PowerManagement.Hibernate 2>/dev/null"]
+        })
+        proc.exited.connect(function(code) {
+            service.sessionActionInProgress = false
+            if (code !== 0) {
+                service.lastSessionError = "休眠操作失败"
+            }
+            proc.destroy()
+        })
+        proc.running = true
+        return true
+    }
+
+    function rebootSystem() {
+        if (sessionActionInProgress)
+            return false
+        sessionActionInProgress = true
+        lastSessionError = ""
+        const proc = processFactory.createObject(service, {
+            command: ["sh", "-c", "qdbus6 org.kde.Shutdown /Shutdown org.kde.Shutdown.logoutAndReboot 2>/dev/null || systemctl reboot 2>/dev/null || loginctl reboot 2>/dev/null"]
+        })
+        proc.exited.connect(function(code) {
+            service.sessionActionInProgress = false
+            if (code !== 0) {
+                service.lastSessionError = "重启操作失败"
+            }
+            proc.destroy()
+        })
+        proc.running = true
+        return true
+    }
+
+    function powerOffSystem() {
+        if (sessionActionInProgress)
+            return false
+        sessionActionInProgress = true
+        lastSessionError = ""
+        const proc = processFactory.createObject(service, {
+            command: ["sh", "-c", "qdbus6 org.kde.Shutdown /Shutdown org.kde.Shutdown.logoutAndShutdown 2>/dev/null || systemctl poweroff 2>/dev/null || loginctl poweroff 2>/dev/null"]
+        })
+        proc.exited.connect(function(code) {
+            service.sessionActionInProgress = false
+            if (code !== 0) {
+                service.lastSessionError = "关机操作失败"
+            }
+            proc.destroy()
+        })
+        proc.running = true
+        return true
+    }
+
+    function switchUser() {
+        if (sessionActionInProgress)
+            return false
+        sessionActionInProgress = true
+        lastSessionError = ""
+        const proc = processFactory.createObject(service, {
+            command: ["sh", "-c", "dm-tool switch-to-greeter 2>/dev/null || qdbus6 org.kde.ksmserver /KSMServer org.kde.KSMServerInterface.openSwitchUser 2>/dev/null || loginctl lock-session 2>/dev/null"]
+        })
+        proc.exited.connect(function(code) {
+            service.sessionActionInProgress = false
+            if (code !== 0) {
+                service.lastSessionError = "切换用户失败"
+            }
+            proc.destroy()
+        })
+        proc.running = true
+        return true
+    }
+
+    // Terminating the current session via KDE Shutdown D-Bus or logind
+    function logoutCurrentSession() {
+        if (sessionActionInProgress)
+            return false
+        sessionActionInProgress = true
+        lastSessionError = ""
+        const proc = processFactory.createObject(service, {
+            command: ["sh", "-c", "qdbus6 org.kde.Shutdown /Shutdown org.kde.Shutdown.logout 2>/dev/null || loginctl terminate-session \"$XDG_SESSION_ID\" 2>/dev/null"]
+        })
+        proc.exited.connect(function(code) {
+            service.sessionActionInProgress = false
+            if (code !== 0) {
+                service.lastSessionError = "注销失败"
+            }
             proc.destroy()
         })
         proc.running = true

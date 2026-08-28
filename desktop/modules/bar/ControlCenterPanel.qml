@@ -30,8 +30,9 @@ Item {
     property bool draggingVolume: false
     property real brightnessPreview: ControlCenterService.brightnessPercent
     property bool draggingBrightness: false
-    property bool logoutConfirmationVisible: false
-    readonly property var player: DockMprisService.activePlayer
+    property bool sessionModalVisible: false
+    property string pendingConfirmAction: ""
+    property alias logoutConfirmationVisible: panel.sessionModalVisible
     signal networkRequested()
     signal bluetoothRequested()
 
@@ -80,7 +81,8 @@ Item {
         }
     }
     function close() {
-        logoutConfirmationVisible = false
+        sessionModalVisible = false
+        pendingConfirmAction = ""
         coordinator.closeAll()
     }
 
@@ -325,7 +327,7 @@ Item {
         MouseArea { id: screenshotPointer; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: ControlCenterService.captureInteractiveScreenshot() }
     }
 
-    // ── Card 5: Logout ───────────────────────────────────────────────
+    // ── Card 5: Power & Session ──────────────────────────────────────
     ControlCenterCard {
         coordinator: coordinator
         offsetTop: 155
@@ -336,7 +338,7 @@ Item {
         cardColor: "transparent"
         cardBorderColor: Qt.rgba(1, 1, 1, 0.24)
 
-        cardScale: logoutPointer.pressed ? 0.91 : (logoutPointer.containsMouse ? 1.06 : 1.0)
+        cardScale: powerPointer.pressed ? 0.91 : (powerPointer.containsMouse ? 1.06 : 1.0)
         Behavior on cardScale { NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
         Image {
             anchors.centerIn: parent
@@ -348,7 +350,17 @@ Item {
             fillMode: Image.PreserveAspectFit
             smooth: true
         }
-        MouseArea { id: logoutPointer; anchors.fill: parent; hoverEnabled: true; enabled: !ControlCenterService.logoutInProgress; cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor; onClicked: panel.logoutConfirmationVisible = true }
+        MouseArea {
+            id: powerPointer
+            anchors.fill: parent
+            hoverEnabled: true
+            enabled: !ControlCenterService.sessionActionInProgress
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: {
+                panel.pendingConfirmAction = ""
+                panel.sessionModalVisible = true
+            }
+        }
     }
 
     // ── Card 6: Do Not Disturb ───────────────────────────────────────
@@ -619,9 +631,9 @@ Item {
         }
     }
 
-    // ── Logout confirmation overlay (independent window on top) ──────
-    // A dark sheet over the whole control-center area with the confirm pair.
-    // Declared last so it stacks above all cards.
+    // ── Power & Session Management Overlay ───────────────────────────
+    // Multi-action modal covering Lock, Suspend, Switch User, Logout,
+    // Reboot and Power Off with confirmation guards.
     ControlCenterCard {
         coordinator: coordinator
         managedByCoordinator: false
@@ -629,84 +641,446 @@ Item {
         offsetRight: 20
         cardRadius: 0
         cardWidth: 336
-        cardHeight: 477
+        cardHeight: 577
         cardColor: "transparent"
         cardBorderColor: "transparent"
-        cardShown: panel.logoutConfirmationVisible
-        // cardColor transparent + no blur region on this sheet would show the
-        // cards through; give it an opaque dark fill so it reads as a modal.
+        cardShown: panel.sessionModalVisible
+
+        // Semi-transparent backdrop overlay to dim the cards below
         Rectangle {
             anchors.fill: parent
-            color: Qt.rgba(0, 0, 0, 0.52)
-            radius: 34
+            color: Qt.rgba(0, 0, 0, 0.55)
+            radius: 30
             MouseArea {
                 anchors.fill: parent
-                onClicked: panel.logoutConfirmationVisible = false
+                onClicked: {
+                    panel.sessionModalVisible = false
+                    panel.pendingConfirmAction = ""
+                }
             }
         }
-        Rectangle {
-            width: 236
-            height: 154
-            anchors.centerIn: parent
-            radius: 23
-            color: Qt.rgba(0.07, 0.08, 0.11, 0.62)
-            border.width: 1
-            border.color: Qt.rgba(1, 1, 1, 0.32)
 
-            Image {
-                anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 16 }
-                width: 28
-                height: 28
-                source: "../../assets/logout.svg"
-                sourceSize.width: 56
-                sourceSize.height: 56
-                fillMode: Image.PreserveAspectFit
-                smooth: true
+        // Floating Modal Container
+        Rectangle {
+            id: sessionDialog
+            width: 296
+            height: panel.pendingConfirmAction === "" ? 336 : 190
+            anchors.centerIn: parent
+            radius: 24
+            color: ThemeService.isDark ? Qt.rgba(0.08, 0.09, 0.13, 0.92) : Qt.rgba(0.96, 0.96, 0.98, 0.95)
+            border.width: 1
+            border.color: ThemeService.isDark ? Qt.rgba(1, 1, 1, 0.22) : Qt.rgba(0, 0, 0, 0.14)
+            clip: true
+
+            Behavior on height {
+                NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
             }
-            Text {
-                anchors { top: parent.top; topMargin: 49; horizontalCenter: parent.horizontalCenter }
-                text: "要注销吗？"
-                color: ThemeService.foregroundColor
-                style: Text.Outline
-                styleColor: Qt.rgba(0, 0, 0, 0.50)
-                font { pixelSize: 15; weight: Font.Bold }
-            }
-            Text {
-                anchors { top: parent.top; topMargin: 72; horizontalCenter: parent.horizontalCenter }
-                text: "未保存的内容可能会丢失"
-                color: ThemeService.foregroundColor
-                opacity: 0.66
-                style: Text.Outline
-                styleColor: Qt.rgba(0, 0, 0, 0.50)
-                font.pixelSize: 10
-            }
-            Row {
-                anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 14 }
-                spacing: 10
-                Rectangle {
-                    width: 94
-                    height: 34
-                    radius: height / 2
-                    color: Qt.rgba(1, 1, 1, 0.12)
-                    border.width: 1
-                    border.color: Qt.rgba(1, 1, 1, 0.24)
-                    Text { anchors.centerIn: parent; text: "取消"; color: ThemeService.foregroundColor; style: Text.Outline; styleColor: Qt.rgba(0, 0, 0, 0.50); font { pixelSize: 12; weight: Font.DemiBold } }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: panel.logoutConfirmationVisible = false }
+
+            // ── VIEW 1: Main Power & Session Menu ──
+            Item {
+                anchors.fill: parent
+                visible: panel.pendingConfirmAction === ""
+
+                // Header
+                Item {
+                    id: sessionHeader
+                    anchors {
+                        top: parent.top
+                        left: parent.left
+                        right: parent.right
+                        topMargin: 14
+                        leftMargin: 16
+                        rightMargin: 16
+                    }
+                    height: 36
+
+                    Row {
+                        anchors {
+                            left: parent.left
+                            verticalCenter: parent.verticalCenter
+                        }
+                        spacing: 10
+
+                        Rectangle {
+                            width: 32
+                            height: 32
+                            radius: 16
+                            color: Qt.rgba(1, 1, 1, 0.15)
+                            border.width: 1
+                            border.color: Qt.rgba(1, 1, 1, 0.25)
+                            SystemIcon {
+                                anchors.centerIn: parent
+                                width: 18
+                                height: 18
+                                role: "switchUser"
+                            }
+                        }
+
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 1
+
+                            Text {
+                                text: ControlCenterService.currentUserName
+                                color: ThemeService.foregroundColor
+                                style: Text.Outline
+                                styleColor: Qt.rgba(0, 0, 0, 0.50)
+                                font { pixelSize: 13; weight: Font.Bold }
+                            }
+                            Text {
+                                text: "电源与会话管理"
+                                color: ThemeService.foregroundColor
+                                opacity: 0.60
+                                style: Text.Outline
+                                styleColor: Qt.rgba(0, 0, 0, 0.40)
+                                font.pixelSize: 10
+                            }
+                        }
+                    }
+
+                    // Close Button "×"
+                    Rectangle {
+                        anchors {
+                            right: parent.right
+                            verticalCenter: parent.verticalCenter
+                        }
+                        width: 26
+                        height: 26
+                        radius: 13
+                        color: closeMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.25) : Qt.rgba(1, 1, 1, 0.12)
+                        border.width: 1
+                        border.color: Qt.rgba(1, 1, 1, 0.18)
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "×"
+                            color: ThemeService.foregroundColor
+                            font { pixelSize: 16; weight: Font.Bold }
+                        }
+                        MouseArea {
+                            id: closeMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                panel.sessionModalVisible = false
+                                panel.pendingConfirmAction = ""
+                            }
+                        }
+                    }
                 }
+
+                // Divider line
                 Rectangle {
-                    width: 94
-                    height: 34
-                    radius: height / 2
-                    color: Qt.rgba(1, 1, 1, 0.12)
-                    border.width: 1
-                    border.color: "#ff453a"
-                    Text { anchors.centerIn: parent; text: "注销"; color: "#ff6961"; style: Text.Outline; styleColor: Qt.rgba(0, 0, 0, 0.50); font { pixelSize: 12; weight: Font.Bold } }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            panel.logoutConfirmationVisible = false
-                            ControlCenterService.logoutCurrentSession()
+                    anchors {
+                        top: sessionHeader.bottom
+                        topMargin: 10
+                        left: parent.left
+                        right: parent.right
+                        leftMargin: 14
+                        rightMargin: 14
+                    }
+                    height: 1
+                    color: Qt.rgba(1, 1, 1, 0.10)
+                }
+
+                // 2-column Grid of Action Cards
+                Grid {
+                    id: actionsGrid
+                    anchors {
+                        top: sessionHeader.bottom
+                        topMargin: 18
+                        horizontalCenter: parent.horizontalCenter
+                    }
+                    columns: 2
+                    spacing: 8
+
+                    // 1. 锁屏 (Lock Screen)
+                    Rectangle {
+                        width: 128; height: 56; radius: 14
+                        color: lockArea.containsMouse ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(1, 1, 1, 0.08)
+                        border.width: 1
+                        border.color: Qt.rgba(1, 1, 1, 0.16)
+
+                        Row {
+                            anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
+                            spacing: 8
+                            SystemIcon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 22; height: 22
+                                role: "lock"
+                            }
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 1
+                                Text { text: "锁屏"; color: ThemeService.foregroundColor; font { pixelSize: 12; weight: Font.Bold } }
+                                Text { text: "锁定屏幕"; color: ThemeService.foregroundColor; opacity: 0.55; font.pixelSize: 9 }
+                            }
+                        }
+                        MouseArea {
+                            id: lockArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                panel.sessionModalVisible = false
+                                panel.close()
+                                ControlCenterService.lockSession()
+                            }
+                        }
+                    }
+
+                    // 2. 睡眠 (Sleep / Suspend)
+                    Rectangle {
+                        width: 128; height: 56; radius: 14
+                        color: sleepArea.containsMouse ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(1, 1, 1, 0.08)
+                        border.width: 1
+                        border.color: Qt.rgba(1, 1, 1, 0.16)
+
+                        Row {
+                            anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
+                            spacing: 8
+                            SystemIcon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 22; height: 22
+                                role: "suspend"
+                            }
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 1
+                                Text { text: "睡眠"; color: ThemeService.foregroundColor; font { pixelSize: 12; weight: Font.Bold } }
+                                Text { text: "挂起系统"; color: ThemeService.foregroundColor; opacity: 0.55; font.pixelSize: 9 }
+                            }
+                        }
+                        MouseArea {
+                            id: sleepArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                panel.sessionModalVisible = false
+                                panel.close()
+                                ControlCenterService.suspendSystem()
+                            }
+                        }
+                    }
+
+                    // 3. 切换用户 (Switch User)
+                    Rectangle {
+                        width: 128; height: 56; radius: 14
+                        color: switchUserArea.containsMouse ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(1, 1, 1, 0.08)
+                        border.width: 1
+                        border.color: Qt.rgba(1, 1, 1, 0.16)
+
+                        Row {
+                            anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
+                            spacing: 8
+                            SystemIcon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 22; height: 22
+                                role: "switchUser"
+                            }
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 1
+                                Text { text: "切换用户"; color: ThemeService.foregroundColor; font { pixelSize: 12; weight: Font.Bold } }
+                                Text { text: "保留会话"; color: ThemeService.foregroundColor; opacity: 0.55; font.pixelSize: 9 }
+                            }
+                        }
+                        MouseArea {
+                            id: switchUserArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                panel.sessionModalVisible = false
+                                panel.close()
+                                ControlCenterService.switchUser()
+                            }
+                        }
+                    }
+
+                    // 4. 注销 (Log Out)
+                    Rectangle {
+                        width: 128; height: 56; radius: 14
+                        color: logoutArea.containsMouse ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(1, 1, 1, 0.08)
+                        border.width: 1
+                        border.color: Qt.rgba(1, 1, 1, 0.16)
+
+                        Row {
+                            anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
+                            spacing: 8
+                            SystemIcon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 22; height: 22
+                                role: "logout"
+                            }
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 1
+                                Text { text: "注销"; color: "#ff9f0a"; font { pixelSize: 12; weight: Font.Bold } }
+                                Text { text: "结束当前会话"; color: ThemeService.foregroundColor; opacity: 0.55; font.pixelSize: 9 }
+                            }
+                        }
+                        MouseArea {
+                            id: logoutArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: panel.pendingConfirmAction = "logout"
+                        }
+                    }
+
+                    // 5. 重启 (Restart)
+                    Rectangle {
+                        width: 128; height: 56; radius: 14
+                        color: rebootArea.containsMouse ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(1, 1, 1, 0.08)
+                        border.width: 1
+                        border.color: Qt.rgba(1, 1, 1, 0.16)
+
+                        Row {
+                            anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
+                            spacing: 8
+                            SystemIcon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 22; height: 22
+                                role: "reboot"
+                            }
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 1
+                                Text { text: "重启"; color: "#ff9f0a"; font { pixelSize: 12; weight: Font.Bold } }
+                                Text { text: "重新启动电脑"; color: ThemeService.foregroundColor; opacity: 0.55; font.pixelSize: 9 }
+                            }
+                        }
+                        MouseArea {
+                            id: rebootArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: panel.pendingConfirmAction = "reboot"
+                        }
+                    }
+
+                    // 6. 关机 (Power Off)
+                    Rectangle {
+                        width: 128; height: 56; radius: 14
+                        color: powerOffArea.containsMouse ? Qt.rgba(255, 69, 58, 0.22) : Qt.rgba(1, 1, 1, 0.08)
+                        border.width: 1
+                        border.color: powerOffArea.containsMouse ? Qt.rgba(255, 69, 58, 0.50) : Qt.rgba(1, 1, 1, 0.16)
+
+                        Row {
+                            anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
+                            spacing: 8
+                            SystemIcon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 22; height: 22
+                                role: "powerOff"
+                            }
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 1
+                                Text { text: "关机"; color: "#ff453a"; font { pixelSize: 12; weight: Font.Bold } }
+                                Text { text: "关闭电脑电源"; color: ThemeService.foregroundColor; opacity: 0.55; font.pixelSize: 9 }
+                            }
+                        }
+                        MouseArea {
+                            id: powerOffArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: panel.pendingConfirmAction = "poweroff"
+                        }
+                    }
+                }
+
+                // Error / Status bar (if error happened)
+                Text {
+                    anchors {
+                        bottom: parent.bottom
+                        bottomMargin: 10
+                        horizontalCenter: parent.horizontalCenter
+                    }
+                    visible: ControlCenterService.lastSessionError.length > 0
+                    text: "⚠ " + ControlCenterService.lastSessionError
+                    color: "#ff453a"
+                    font { pixelSize: 10; weight: Font.Medium }
+                }
+            }
+
+            // ── VIEW 2: Confirmation Dialog ──
+            Item {
+                anchors.fill: parent
+                visible: panel.pendingConfirmAction !== ""
+
+                SystemIcon {
+                    anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 20 }
+                    width: 32
+                    height: 32
+                    role: panel.pendingConfirmAction === "poweroff" ? "powerOff"
+                        : (panel.pendingConfirmAction === "reboot" ? "reboot" : "logout")
+                }
+
+                Text {
+                    anchors { top: parent.top; topMargin: 58; horizontalCenter: parent.horizontalCenter }
+                    text: panel.pendingConfirmAction === "poweroff" ? "确定要关机吗？"
+                        : (panel.pendingConfirmAction === "reboot" ? "确定要重启吗？" : "确定要注销吗？")
+                    color: ThemeService.foregroundColor
+                    style: Text.Outline
+                    styleColor: Qt.rgba(0, 0, 0, 0.50)
+                    font { pixelSize: 15; weight: Font.Bold }
+                }
+
+                Text {
+                    anchors { top: parent.top; topMargin: 82; horizontalCenter: parent.horizontalCenter }
+                    text: "未保存的工作可能会丢失"
+                    color: ThemeService.foregroundColor
+                    opacity: 0.66
+                    style: Text.Outline
+                    styleColor: Qt.rgba(0, 0, 0, 0.50)
+                    font.pixelSize: 11
+                }
+
+                Row {
+                    anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 16 }
+                    spacing: 12
+
+                    Rectangle {
+                        width: 108
+                        height: 36
+                        radius: 18
+                        color: cancelConfirmMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.22) : Qt.rgba(1, 1, 1, 0.12)
+                        border.width: 1
+                        border.color: Qt.rgba(1, 1, 1, 0.24)
+                        Text {
+                            anchors.centerIn: parent
+                            text: "取消"
+                            color: ThemeService.foregroundColor
+                            font { pixelSize: 13; weight: Font.DemiBold }
+                        }
+                        MouseArea {
+                            id: cancelConfirmMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: panel.pendingConfirmAction = ""
+                        }
+                    }
+
+                    Rectangle {
+                        width: 108
+                        height: 36
+                        radius: 18
+                        color: executeConfirmMouse.containsMouse ? Qt.rgba(255, 69, 58, 0.35) : Qt.rgba(255, 69, 58, 0.20)
+                        border.width: 1
+                        border.color: "#ff453a"
+                        Text {
+                            anchors.centerIn: parent
+                            text: panel.pendingConfirmAction === "poweroff" ? "关机"
+                                : (panel.pendingConfirmAction === "reboot" ? "重启" : "注销")
+                            color: "#ff6961"
+                            font { pixelSize: 13; weight: Font.Bold }
+                        }
+                        MouseArea {
+                            id: executeConfirmMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                const action = panel.pendingConfirmAction
+                                panel.pendingConfirmAction = ""
+                                panel.sessionModalVisible = false
+                                panel.close()
+                                if (action === "poweroff") {
+                                    ControlCenterService.powerOffSystem()
+                                } else if (action === "reboot") {
+                                    ControlCenterService.rebootSystem()
+                                } else if (action === "logout") {
+                                    ControlCenterService.logoutCurrentSession()
+                                }
+                            }
                         }
                     }
                 }
