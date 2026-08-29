@@ -25,7 +25,7 @@ Rectangle {
     property color _displayAmbientSecondary: ambientSecondary
     // 0 = dock/base surface, 1 = popup, 2 = contextual foreground menu.
     property real materialDepth: 0.0
-    property real liquidStrength: AppearanceConfigService.liquidStrength
+    property real liquidStrength: AppearanceConfigService.effectiveDockLiquid
     readonly property real normalizedLiquidStrength: Math.max(
         0.0, Math.min(1.0, liquidStrength))
     readonly property real baseLuminance: baseColor.r * 0.2126
