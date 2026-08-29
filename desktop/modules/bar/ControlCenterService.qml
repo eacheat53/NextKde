@@ -331,15 +331,29 @@ QtObject {
         return true
     }
 
-    // Spectacle's region mode lets the user choose the capture area after
-    // tapping the shortcut, which is safer and more useful than silently
-    // saving an arbitrary full-screen image.
+    // Launches an interactive region screenshot tool. Probes for feature-rich
+    // third-party screenshot utilities (mark-shot, flameshot, ksnip) first and
+    // gracefully falls back to KDE's built-in Spectacle for general users.
     function captureInteractiveScreenshot() {
         if (screenshotInProgress)
             return false
         screenshotInProgress = true
         const proc = processFactory.createObject(service, {
-            command: ["spectacle", "-r"]
+            command: ["sh", "-c",
+                "if command -v mark-shot >/dev/null 2>&1; then "
+                + "exec mark-shot --capture; "
+                + "elif command -v markshot >/dev/null 2>&1; then "
+                + "exec markshot --capture; "
+                + "elif command -v flameshot >/dev/null 2>&1; then "
+                + "exec flameshot gui; "
+                + "elif command -v ksnip >/dev/null 2>&1; then "
+                + "exec ksnip -r; "
+                + "elif command -v spectacle >/dev/null 2>&1; then "
+                + "exec spectacle -r; "
+                + "elif command -v grimblast >/dev/null 2>&1; then "
+                + "exec grimblast copy area; "
+                + "fi"
+            ]
         })
         proc.exited.connect(function() {
             service.screenshotInProgress = false
