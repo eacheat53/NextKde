@@ -65,6 +65,10 @@ ApplicationWindow {
         {
             subtitle: "Dock",
             groups: []
+        },
+        {
+            subtitle: "启动台",
+            groups: []
         }
     ]
 
@@ -1248,6 +1252,16 @@ ApplicationWindow {
             }
         ]
 
+        property bool barBlurInheritDock: true
+        property real barBlurStrength: 0.42
+        property real barLiquidStrength: 1.0
+        property bool barBlurDirty: false
+        property bool barLiquidDirty: false
+
+        function percentage(value) {
+            return Math.round(value * 100) + "%"
+        }
+
         function isValidStyle(style) {
             return style === "windows12" || style === "macos"
                 || style === "material"
@@ -1264,6 +1278,11 @@ ApplicationWindow {
             shellStyle = state.shellStyle
             barIntegratedWithDock = Boolean(state.barIntegratedWithDock)
             barVisibilityModeIndex = barVisibilityModeIndexFromString(state.barVisibilityMode)
+            barBlurInheritDock = state.barBlurInheritDock !== undefined ? Boolean(state.barBlurInheritDock) : true
+            barBlurStrength = Number.isFinite(Number(state.barBlurStrength)) ? Number(state.barBlurStrength) : 0.42
+            barLiquidStrength = Number.isFinite(Number(state.barLiquidStrength)) ? Number(state.barLiquidStrength) : 1.0
+            barBlurDirty = false
+            barLiquidDirty = false
             errorText = ""
         }
 
@@ -1302,6 +1321,73 @@ ApplicationWindow {
                 return
             const mode = barVisibilityModes[index]
             applyState(bridge.updateBarVisibilityMode(mode))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        function setBarBlurInherit(enabled) {
+            if (!bridge) return
+            applyState(bridge.updateBarBlurInherit(enabled))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        Timer {
+            id: liveBarBlurDebounce
+            interval: 60
+            repeat: false
+            onTriggered: {
+                if (themePage.bridge && themePage.barBlurDirty) {
+                    themePage.bridge.updateBarBlurStrength(themePage.barBlurStrength)
+                }
+            }
+        }
+
+        Timer {
+            id: liveBarLiquidDebounce
+            interval: 60
+            repeat: false
+            onTriggered: {
+                if (themePage.bridge && themePage.barLiquidDirty) {
+                    themePage.bridge.updateBarLiquidStrength(themePage.barLiquidStrength)
+                }
+            }
+        }
+
+        function previewBarBlur(value) {
+            const clamped = Math.max(0, Math.min(1, value))
+            if (Math.abs(barBlurStrength - clamped) < 0.005)
+                return
+            barBlurStrength = clamped
+            barBlurDirty = true
+            liveBarBlurDebounce.restart()
+        }
+
+        function commitBarBlur() {
+            liveBarBlurDebounce.stop()
+            if (!barBlurDirty || !bridge)
+                return
+            barBlurDirty = false
+            applyState(bridge.updateBarBlurStrength(barBlurStrength))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        function previewBarLiquid(value) {
+            const clamped = Math.max(0, Math.min(1, value))
+            if (Math.abs(barLiquidStrength - clamped) < 0.005)
+                return
+            barLiquidStrength = clamped
+            barLiquidDirty = true
+            liveBarLiquidDebounce.restart()
+        }
+
+        function commitBarLiquid() {
+            liveBarLiquidDebounce.stop()
+            if (!barLiquidDirty || !bridge)
+                return
+            barLiquidDirty = false
+            applyState(bridge.updateBarLiquidStrength(barLiquidStrength))
             if (bridge.lastError)
                 errorText = bridge.lastError
         }
@@ -1479,12 +1565,14 @@ ApplicationWindow {
 
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 119
+            implicitHeight: barLayoutCol.implicitHeight
             radius: 18
             color: theme.card
 
             Column {
-                anchors.fill: parent
+                id: barLayoutCol
+                anchors.left: parent.left
+                anchors.right: parent.right
 
                 Item {
                     width: parent.width
@@ -1560,6 +1648,137 @@ ApplicationWindow {
                         }
                     }
                 }
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 53
+                    height: 1
+                    color: theme.separator
+                }
+
+                Item {
+                    width: parent.width
+                    height: 54
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "⎘"; tint: "#30d158" }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "跟随 Dock 模糊效果"
+                                color: theme.primaryText
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                            }
+                            Text {
+                                text: "关闭后可为顶部栏单独自定义模糊与液态强度"
+                                color: theme.secondaryText
+                                font.pixelSize: 11
+                            }
+                        }
+                        LiquidControls.LiquidGlassSwitch {
+                            checked: themePage.barBlurInheritDock
+                            accentColor: "#30d158"
+                            trackColor: theme.divider
+                            onToggled: function(checked) {
+                                themePage.setBarBlurInherit(checked)
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    visible: !themePage.barBlurInheritDock
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 53
+                    height: 1
+                    color: theme.separator
+                }
+
+                Item {
+                    visible: !themePage.barBlurInheritDock
+                    width: parent.width
+                    height: 48
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "◌"; tint: "#5ac8fa" }
+                        Text {
+                            text: "Bar 模糊强度"
+                            color: theme.primaryText
+                            font.pixelSize: 14
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: themePage.percentage(themePage.barBlurStrength)
+                            color: theme.secondaryText
+                            font.pixelSize: 12
+                            Layout.preferredWidth: 38
+                            horizontalAlignment: Text.AlignRight
+                        }
+                        LiquidControls.LiquidSlider {
+                            Layout.preferredWidth: 190
+                            value: themePage.barBlurStrength
+                            trackColor: theme.divider
+                            onPreviewChanged: function(position) {
+                                themePage.previewBarBlur(position)
+                            }
+                            onCommitRequested: themePage.commitBarBlur()
+                        }
+                    }
+                }
+
+                Rectangle {
+                    visible: !themePage.barBlurInheritDock
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 53
+                    height: 1
+                    color: theme.separator
+                }
+
+                Item {
+                    visible: !themePage.barBlurInheritDock
+                    width: parent.width
+                    height: 48
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "≈"; tint: "#af52de" }
+                        Text {
+                            text: "Bar 液态强度"
+                            color: theme.primaryText
+                            font.pixelSize: 14
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: themePage.percentage(themePage.barLiquidStrength)
+                            color: theme.secondaryText
+                            font.pixelSize: 12
+                            Layout.preferredWidth: 38
+                            horizontalAlignment: Text.AlignRight
+                        }
+                        LiquidControls.LiquidSlider {
+                            Layout.preferredWidth: 190
+                            value: themePage.barLiquidStrength
+                            trackColor: theme.divider
+                            onPreviewChanged: function(position) {
+                                themePage.previewBarLiquid(position)
+                            }
+                            onCommitRequested: themePage.commitBarLiquid()
+                        }
+                    }
+                }
             }
         }
 
@@ -1579,6 +1798,584 @@ ApplicationWindow {
             Layout.rightMargin: 13
             visible: themePage.errorText.length > 0
             text: themePage.errorText
+            color: "#ff453a"
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+        }
+    }
+
+    component LauncherSettingsPage: ColumnLayout {
+        id: launcherPage
+
+        Layout.fillWidth: true
+        spacing: 7
+        property var bridge: (typeof settingsBridge !== "undefined") ? settingsBridge : null
+        property string displayMode: "bottom"
+        readonly property var displayModes: ["bottom", "center", "fullscreen"]
+        property int displayModeIndex: 0
+        property real iconSize: 52
+        property real iconSpacing: 24
+        property real fontSize: 11
+        property string fontWeight: "normal"
+        readonly property var fontWeights: ["normal", "medium", "bold"]
+        property int fontWeightIndex: 0
+        property string errorText: ""
+
+        property bool launcherBlurInheritDock: true
+        property real launcherBlurStrength: 0.42
+        property real launcherLiquidStrength: 1.0
+        property bool launcherBlurDirty: false
+        property bool launcherLiquidDirty: false
+
+        function percentage(value) {
+            return Math.round(value * 100) + "%"
+        }
+
+        function applyAppearanceSnapshot(snapshot) {
+            if (!snapshot) return
+            launcherBlurInheritDock = snapshot.launcherBlurInheritDock !== undefined
+                ? Boolean(snapshot.launcherBlurInheritDock) : true
+            launcherBlurStrength = Number.isFinite(Number(snapshot.launcherBlurStrength))
+                ? Number(snapshot.launcherBlurStrength) : 0.42
+            launcherLiquidStrength = Number.isFinite(Number(snapshot.launcherLiquidStrength))
+                ? Number(snapshot.launcherLiquidStrength) : 1.0
+            launcherBlurDirty = false
+            launcherLiquidDirty = false
+        }
+
+        function applySnapshot(snapshot) {
+            if (!snapshot) return
+            if (snapshot.displayMode !== undefined) {
+                displayMode = snapshot.displayMode
+                const idx = displayModes.indexOf(displayMode)
+                displayModeIndex = idx >= 0 ? idx : 0
+            }
+            if (snapshot.iconSize !== undefined) {
+                iconSize = snapshot.iconSize
+            }
+            if (snapshot.iconSpacing !== undefined) {
+                iconSpacing = snapshot.iconSpacing
+            }
+            if (snapshot.fontSize !== undefined) {
+                fontSize = snapshot.fontSize
+            }
+            if (snapshot.fontWeight !== undefined) {
+                fontWeight = snapshot.fontWeight
+                const idx = fontWeights.indexOf(fontWeight)
+                fontWeightIndex = idx >= 0 ? idx : 0
+            }
+        }
+
+        function reloadFromBridge() {
+            if (!bridge) return
+            const snap = bridge.launcherSnapshot()
+            applySnapshot(snap)
+            const appSnap = bridge.appearanceSnapshot()
+            applyAppearanceSnapshot(appSnap)
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        function setLauncherBlurInherit(enabled) {
+            if (!bridge) return
+            const snap = bridge.updateLauncherBlurInherit(enabled)
+            applyAppearanceSnapshot(snap)
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        Timer {
+            id: liveLauncherBlurDebounce
+            interval: 60
+            repeat: false
+            onTriggered: {
+                if (launcherPage.bridge && launcherPage.launcherBlurDirty) {
+                    launcherPage.bridge.updateLauncherBlurStrength(launcherPage.launcherBlurStrength)
+                }
+            }
+        }
+
+        Timer {
+            id: liveLauncherLiquidDebounce
+            interval: 60
+            repeat: false
+            onTriggered: {
+                if (launcherPage.bridge && launcherPage.launcherLiquidDirty) {
+                    launcherPage.bridge.updateLauncherLiquidStrength(launcherPage.launcherLiquidStrength)
+                }
+            }
+        }
+
+        function previewLauncherBlur(value) {
+            const clamped = Math.max(0, Math.min(1, value))
+            if (Math.abs(launcherBlurStrength - clamped) < 0.005)
+                return
+            launcherBlurStrength = clamped
+            launcherBlurDirty = true
+            liveLauncherBlurDebounce.restart()
+        }
+
+        function commitLauncherBlur() {
+            liveLauncherBlurDebounce.stop()
+            if (!launcherBlurDirty || !bridge)
+                return
+            launcherBlurDirty = false
+            const snap = bridge.updateLauncherBlurStrength(launcherBlurStrength)
+            applyAppearanceSnapshot(snap)
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        function previewLauncherLiquid(value) {
+            const clamped = Math.max(0, Math.min(1, value))
+            if (Math.abs(launcherLiquidStrength - clamped) < 0.005)
+                return
+            launcherLiquidStrength = clamped
+            launcherLiquidDirty = true
+            liveLauncherLiquidDebounce.restart()
+        }
+
+        function commitLauncherLiquid() {
+            liveLauncherLiquidDebounce.stop()
+            if (!launcherLiquidDirty || !bridge)
+                return
+            launcherLiquidDirty = false
+            const snap = bridge.updateLauncherLiquidStrength(launcherLiquidStrength)
+            applyAppearanceSnapshot(snap)
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        function saveDisplayMode(index) {
+            displayModeIndex = index
+            displayMode = displayModes[index] || "bottom"
+            if (bridge) {
+                const snap = bridge.updateLauncherDisplayMode(displayMode)
+                applySnapshot(snap)
+                if (bridge.lastError)
+                    errorText = bridge.lastError
+            }
+        }
+
+        function saveFontWeight(index) {
+            fontWeightIndex = index
+            fontWeight = fontWeights[index] || "normal"
+            if (bridge) {
+                const snap = bridge.updateLauncherFontWeight(fontWeight)
+                applySnapshot(snap)
+                if (bridge.lastError)
+                    errorText = bridge.lastError
+            }
+        }
+
+        function previewIconSize(position) {
+            iconSize = Math.round(40 + position * 40)
+        }
+
+        function commitIconSize() {
+            if (bridge) {
+                const snap = bridge.updateLauncherIconSize(iconSize)
+                applySnapshot(snap)
+                if (bridge.lastError)
+                    errorText = bridge.lastError
+            }
+        }
+
+        function previewIconSpacing(position) {
+            iconSpacing = Math.round(10 + position * 38)
+        }
+
+        function commitIconSpacing() {
+            if (bridge) {
+                const snap = bridge.updateLauncherIconSpacing(iconSpacing)
+                applySnapshot(snap)
+                if (bridge.lastError)
+                    errorText = bridge.lastError
+            }
+        }
+
+        function previewFontSize(position) {
+            fontSize = Math.round(9 + position * 9)
+        }
+
+        function commitFontSize() {
+            if (bridge) {
+                const snap = bridge.updateLauncherFontSize(fontSize)
+                applySnapshot(snap)
+                if (bridge.lastError)
+                    errorText = bridge.lastError
+            }
+        }
+
+        Component.onCompleted: reloadFromBridge()
+
+        Text {
+            text: "显示形态".toUpperCase()
+            color: theme.secondaryText
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            Layout.leftMargin: 13
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            color: theme.card
+            radius: 18
+            implicitHeight: 54
+
+            Item {
+                anchors.fill: parent
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 16
+                    anchors.rightMargin: 16
+                    spacing: 12
+                    SettingIcon { symbol: "❖"; tint: "#ff9500" }
+                    Text {
+                        text: "启动台形态"
+                        color: theme.primaryText
+                        font.pixelSize: 14
+                    }
+                    Item { Layout.fillWidth: true }
+                    SettingsNavBar {
+                        id: launcherModeNavBar
+                        model: [
+                            { id: "bottom",     label: "底部吸附" },
+                            { id: "center",     label: "屏幕居中" },
+                            { id: "fullscreen", label: "全屏覆盖" }
+                        ]
+                        itemWidthOverride: 76
+                        currentIndex: launcherPage.displayModeIndex
+                        onSelectionChanged: function(index) {
+                            launcherPage.saveDisplayMode(index)
+                        }
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: "网格、图标与文字".toUpperCase()
+            color: theme.secondaryText
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            Layout.leftMargin: 13
+            Layout.topMargin: 14
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            color: theme.card
+            radius: 18
+            implicitHeight: 221
+
+            Column {
+                anchors.fill: parent
+
+                Item {
+                    width: parent.width
+                    height: 54
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "◉"; tint: "#ff9500" }
+                        Text {
+                            text: "图标尺寸"
+                            color: theme.primaryText
+                            font.pixelSize: 14
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: Math.round(launcherPage.iconSize) + " px"
+                            color: theme.secondaryText
+                            font.pixelSize: 12
+                        }
+                        LiquidControls.LiquidSlider {
+                            Layout.preferredWidth: 190
+                            value: (launcherPage.iconSize - 40) / 40
+                            trackColor: theme.divider
+                            onPreviewChanged: function(position) {
+                                launcherPage.previewIconSize(position)
+                            }
+                            onCommitRequested: launcherPage.commitIconSize()
+                        }
+                    }
+                }
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 53
+                    height: 1
+                    color: theme.separator
+                }
+
+                Item {
+                    width: parent.width
+                    height: 54
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "↔"; tint: "#ff9500" }
+                        Text {
+                            text: "图标间距"
+                            color: theme.primaryText
+                            font.pixelSize: 14
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: Math.round(launcherPage.iconSpacing) + " px"
+                            color: theme.secondaryText
+                            font.pixelSize: 12
+                        }
+                        LiquidControls.LiquidSlider {
+                            Layout.preferredWidth: 190
+                            value: (launcherPage.iconSpacing - 10) / 38
+                            trackColor: theme.divider
+                            onPreviewChanged: function(position) {
+                                launcherPage.previewIconSpacing(position)
+                            }
+                            onCommitRequested: launcherPage.commitIconSpacing()
+                        }
+                    }
+                }
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 53
+                    height: 1
+                    color: theme.separator
+                }
+
+                Item {
+                    width: parent.width
+                    height: 54
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "T"; tint: "#ff9500" }
+                        Text {
+                            text: "字体大小"
+                            color: theme.primaryText
+                            font.pixelSize: 14
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: Math.round(launcherPage.fontSize) + " px"
+                            color: theme.secondaryText
+                            font.pixelSize: 12
+                        }
+                        LiquidControls.LiquidSlider {
+                            Layout.preferredWidth: 190
+                            value: (launcherPage.fontSize - 9) / 9
+                            trackColor: theme.divider
+                            onPreviewChanged: function(position) {
+                                launcherPage.previewFontSize(position)
+                            }
+                            onCommitRequested: launcherPage.commitFontSize()
+                        }
+                    }
+                }
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 53
+                    height: 1
+                    color: theme.separator
+                }
+
+                Item {
+                    width: parent.width
+                    height: 54
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "B"; tint: "#ff9500" }
+                        Text {
+                            text: "字体粗细"
+                            color: theme.primaryText
+                            font.pixelSize: 14
+                        }
+                        Item { Layout.fillWidth: true }
+                        SettingsNavBar {
+                            id: launcherFontWeightNavBar
+                            model: [
+                                { id: "normal", label: "常规" },
+                                { id: "medium", label: "中黑" },
+                                { id: "bold",   label: "粗体" }
+                            ]
+                            itemWidthOverride: 56
+                            currentIndex: launcherPage.fontWeightIndex
+                            onSelectionChanged: function(index) {
+                                launcherPage.saveFontWeight(index)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: "外观与模糊效果".toUpperCase()
+            color: theme.secondaryText
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            Layout.leftMargin: 13
+            Layout.topMargin: 14
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: launcherBlurCol.implicitHeight
+            radius: 18
+            color: theme.card
+
+            Column {
+                id: launcherBlurCol
+                anchors.left: parent.left
+                anchors.right: parent.right
+
+                Item {
+                    width: parent.width
+                    height: 54
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "⎘"; tint: "#30d158" }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "跟随 Dock 模糊效果"
+                                color: theme.primaryText
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                            }
+                            Text {
+                                text: "关闭后可为启动台单独自定义背景模糊与液态强度"
+                                color: theme.secondaryText
+                                font.pixelSize: 11
+                            }
+                        }
+                        LiquidControls.LiquidGlassSwitch {
+                            checked: launcherPage.launcherBlurInheritDock
+                            accentColor: "#30d158"
+                            trackColor: theme.divider
+                            onToggled: function(checked) {
+                                launcherPage.setLauncherBlurInherit(checked)
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    visible: !launcherPage.launcherBlurInheritDock
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 53
+                    height: 1
+                    color: theme.separator
+                }
+
+                Item {
+                    visible: !launcherPage.launcherBlurInheritDock
+                    width: parent.width
+                    height: 48
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "◌"; tint: "#5ac8fa" }
+                        Text {
+                            text: "启动台模糊强度"
+                            color: theme.primaryText
+                            font.pixelSize: 14
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: launcherPage.percentage(launcherPage.launcherBlurStrength)
+                            color: theme.secondaryText
+                            font.pixelSize: 12
+                            Layout.preferredWidth: 38
+                            horizontalAlignment: Text.AlignRight
+                        }
+                        LiquidControls.LiquidSlider {
+                            Layout.preferredWidth: 190
+                            value: launcherPage.launcherBlurStrength
+                            trackColor: theme.divider
+                            onPreviewChanged: function(position) {
+                                launcherPage.previewLauncherBlur(position)
+                            }
+                            onCommitRequested: launcherPage.commitLauncherBlur()
+                        }
+                    }
+                }
+
+                Rectangle {
+                    visible: !launcherPage.launcherBlurInheritDock
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 53
+                    height: 1
+                    color: theme.separator
+                }
+
+                Item {
+                    visible: !launcherPage.launcherBlurInheritDock
+                    width: parent.width
+                    height: 48
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "≈"; tint: "#af52de" }
+                        Text {
+                            text: "启动台液态强度"
+                            color: theme.primaryText
+                            font.pixelSize: 14
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: launcherPage.percentage(launcherPage.launcherLiquidStrength)
+                            color: theme.secondaryText
+                            font.pixelSize: 12
+                            Layout.preferredWidth: 38
+                            horizontalAlignment: Text.AlignRight
+                        }
+                        LiquidControls.LiquidSlider {
+                            Layout.preferredWidth: 190
+                            value: launcherPage.launcherLiquidStrength
+                            trackColor: theme.divider
+                            onPreviewChanged: function(position) {
+                                launcherPage.previewLauncherLiquid(position)
+                            }
+                            onCommitRequested: launcherPage.commitLauncherLiquid()
+                        }
+                    }
+                }
+            }
+        }
+
+        Text {
+            Layout.fillWidth: true
+            Layout.leftMargin: 13
+            Layout.rightMargin: 13
+            visible: launcherPage.errorText.length > 0
+            text: launcherPage.errorText
             color: "#ff453a"
             font.pixelSize: 12
             wrapMode: Text.Wrap
@@ -1669,6 +2466,15 @@ ApplicationWindow {
                     navTint: "#0a84ff"
                 }
 
+                SidebarEntry {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 1
+                    pageIndex: 3
+                    label: "启动台"
+                    navSymbol: "❖"
+                    navTint: "#ff9500"
+                }
+
                 Item {
                     Layout.fillHeight: true
                 }
@@ -1711,7 +2517,7 @@ ApplicationWindow {
                         Layout.bottomMargin: 18
                     }
                     Repeater {
-                        model: window.currentPage === 0
+                        model: (window.currentPage >= 0 && window.currentPage <= 3)
                             ? [] : window.contentByPage[window.currentPage].groups
                         delegate: ColumnLayout {
                             required property var modelData
@@ -1740,6 +2546,10 @@ ApplicationWindow {
                             }
                             Item { Layout.preferredHeight: 14 }
                         }
+                    }
+
+                    LauncherSettingsPage {
+                        visible: window.currentPage === 3
                     }
 
                     DockSettingsPage {
