@@ -242,6 +242,92 @@ ApplicationWindow {
         property string errorText: ""
         property bool layoutDirty: false
 
+        property bool dockBlurInherit: true
+        property real dockBlurStrength: 0.42
+        property real dockLiquidStrength: 1.0
+        property bool dockBlurDirty: false
+        property bool dockLiquidDirty: false
+
+        function percentage(value) {
+            return Math.round(value * 100) + "%"
+        }
+
+        function setDockBlurInherit(enabled) {
+            if (!bridge) return
+            applyAppearanceState(bridge.updateDockBlurInherit(enabled))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        Timer {
+            id: liveDockBlurDebounce
+            interval: 60
+            repeat: false
+            onTriggered: {
+                if (dockPage.bridge && dockPage.dockBlurDirty) {
+                    dockPage.bridge.updateDockBlurStrength(dockPage.dockBlurStrength)
+                }
+            }
+        }
+
+        Timer {
+            id: liveDockLiquidDebounce
+            interval: 60
+            repeat: false
+            onTriggered: {
+                if (dockPage.bridge && dockPage.dockLiquidDirty) {
+                    dockPage.bridge.updateDockLiquidStrength(dockPage.dockLiquidStrength)
+                }
+            }
+        }
+
+        function previewDockBlur(value) {
+            const clamped = Math.max(0, Math.min(1, value))
+            if (Math.abs(dockBlurStrength - clamped) < 0.005)
+                return
+            dockBlurStrength = clamped
+            dockBlurDirty = true
+            liveDockBlurDebounce.restart()
+        }
+
+        function commitDockBlur() {
+            liveDockBlurDebounce.stop()
+            if (!dockBlurDirty || !bridge)
+                return
+            dockBlurDirty = false
+            applyAppearanceState(bridge.updateDockBlurStrength(dockBlurStrength))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        function previewDockLiquid(value) {
+            const clamped = Math.max(0, Math.min(1, value))
+            if (Math.abs(dockLiquidStrength - clamped) < 0.005)
+                return
+            dockLiquidStrength = clamped
+            dockLiquidDirty = true
+            liveDockLiquidDebounce.restart()
+        }
+
+        function commitDockLiquid() {
+            liveDockLiquidDebounce.stop()
+            if (!dockLiquidDirty || !bridge)
+                return
+            dockLiquidDirty = false
+            applyAppearanceState(bridge.updateDockLiquidStrength(dockLiquidStrength))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        function applyAppearanceState(state) {
+            if (!state) return
+            dockBlurInherit = state.dockBlurInherit !== undefined ? Boolean(state.dockBlurInherit) : true
+            dockBlurStrength = Number.isFinite(Number(state.dockBlurStrength)) ? Number(state.dockBlurStrength) : 0.42
+            dockLiquidStrength = Number.isFinite(Number(state.dockLiquidStrength)) ? Number(state.dockLiquidStrength) : 1.0
+            dockBlurDirty = false
+            dockLiquidDirty = false
+        }
+
         function positionIndexFromString(position) {
             const idx = dockPositions.indexOf(position)
             return idx >= 0 ? idx : 0
@@ -401,6 +487,7 @@ ApplicationWindow {
                 return
             }
             applyState(bridge.dockSnapshot())
+            applyAppearanceState(bridge.appearanceSnapshot())
             if (bridge.lastError)
                 errorText = bridge.lastError
         }
@@ -581,101 +668,6 @@ ApplicationWindow {
                             currentIndex: dockPage.visibilityModeIndex
                             onSelectionChanged: function(index) {
                                 dockPage.saveVisibilityMode(index)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Text {
-            text: "TOP BAR 顶部状态栏".toUpperCase()
-            color: theme.secondaryText
-            font.pixelSize: 12
-            font.weight: Font.DemiBold
-            Layout.leftMargin: 13
-            Layout.topMargin: 14
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            color: theme.card
-            radius: 18
-            implicitHeight: 119
-
-            Column {
-                anchors.fill: parent
-
-                Item {
-                    width: parent.width
-                    height: 54
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 16
-                        anchors.rightMargin: 16
-                        spacing: 12
-                        SettingIcon { symbol: "◉"; tint: "#5856d6" }
-                        Text {
-                            text: "Bar 显示方式"
-                            color: theme.primaryText
-                            font.pixelSize: 14
-                            font.weight: Font.DemiBold
-                        }
-                        Item { Layout.fillWidth: true }
-                        SettingsNavBar {
-                            id: barVisibilityInDockPageNavBar
-                            model: [
-                                { id: "always", label: "始终显示" },
-                                { id: "smart", label: "智能隐藏" },
-                                { id: "persistent", label: "持续隐藏" }
-                            ]
-                            itemWidthOverride: 76
-                            currentIndex: dockPage.barVisibilityModeIndex
-                            onSelectionChanged: function(index) {
-                                dockPage.saveBarVisibilityMode(index)
-                            }
-                        }
-                    }
-                }
-
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.leftMargin: 53
-                    height: 1
-                    color: theme.separator
-                }
-
-                Item {
-                    width: parent.width
-                    height: 64
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 16
-                        anchors.rightMargin: 16
-                        spacing: 12
-                        SettingIcon { symbol: "⇲"; tint: "#ff9f0a" }
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 2
-                            Text {
-                                text: "Bar 融入 Dock"
-                                color: theme.primaryText
-                                font.pixelSize: 14
-                                font.weight: Font.DemiBold
-                            }
-                            Text {
-                                text: "仅在 Dock 位于底部时生效；侧边 Dock 自动保留顶部 Bar"
-                                color: theme.secondaryText
-                                font.pixelSize: 11
-                            }
-                        }
-                        LiquidControls.LiquidGlassSwitch {
-                            checked: dockPage.barIntegratedWithDock
-                            accentColor: "#0a84ff"
-                            trackColor: theme.divider
-                            onToggled: function(checked) {
-                                dockPage.setBarIntegratedWithDock(checked)
                             }
                         }
                     }
@@ -930,6 +922,151 @@ ApplicationWindow {
 
             }
         }
+
+        Text {
+            text: "外观与模糊效果".toUpperCase()
+            color: theme.secondaryText
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            Layout.leftMargin: 13
+            Layout.topMargin: 14
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: dockBlurCol.implicitHeight
+            radius: 18
+            color: theme.card
+
+            Column {
+                id: dockBlurCol
+                anchors.left: parent.left
+                anchors.right: parent.right
+
+                Item {
+                    width: parent.width
+                    height: 54
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "⎘"; tint: "#30d158" }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "跟随显示设置"
+                                color: theme.primaryText
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                            }
+                            Text {
+                                text: "关闭后可为 Dock 单独自定义背景模糊与液态强度"
+                                color: theme.secondaryText
+                                font.pixelSize: 11
+                            }
+                        }
+                        LiquidControls.LiquidGlassSwitch {
+                            checked: dockPage.dockBlurInherit
+                            accentColor: "#30d158"
+                            trackColor: theme.divider
+                            onToggled: function(checked) {
+                                dockPage.setDockBlurInherit(checked)
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    visible: !dockPage.dockBlurInherit
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 53
+                    height: 1
+                    color: theme.separator
+                }
+
+                Item {
+                    visible: !dockPage.dockBlurInherit
+                    width: parent.width
+                    height: 48
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "◌"; tint: "#5ac8fa" }
+                        Text {
+                            text: "Dock 模糊强度"
+                            color: theme.primaryText
+                            font.pixelSize: 14
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: dockPage.percentage(dockPage.dockBlurStrength)
+                            color: theme.secondaryText
+                            font.pixelSize: 12
+                            Layout.preferredWidth: 38
+                            horizontalAlignment: Text.AlignRight
+                        }
+                        LiquidControls.LiquidSlider {
+                            Layout.preferredWidth: 190
+                            value: dockPage.dockBlurStrength
+                            trackColor: theme.divider
+                            onPreviewChanged: function(position) {
+                                dockPage.previewDockBlur(position)
+                            }
+                            onCommitRequested: dockPage.commitDockBlur()
+                        }
+                    }
+                }
+
+                Rectangle {
+                    visible: !dockPage.dockBlurInherit
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 53
+                    height: 1
+                    color: theme.separator
+                }
+
+                Item {
+                    visible: !dockPage.dockBlurInherit
+                    width: parent.width
+                    height: 48
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "≈"; tint: "#af52de" }
+                        Text {
+                            text: "Dock 液态强度"
+                            color: theme.primaryText
+                            font.pixelSize: 14
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: dockPage.percentage(dockPage.dockLiquidStrength)
+                            color: theme.secondaryText
+                            font.pixelSize: 12
+                            Layout.preferredWidth: 38
+                            horizontalAlignment: Text.AlignRight
+                        }
+                        LiquidControls.LiquidSlider {
+                            Layout.preferredWidth: 190
+                            value: dockPage.dockLiquidStrength
+                            trackColor: theme.divider
+                            onPreviewChanged: function(position) {
+                                dockPage.previewDockLiquid(position)
+                            }
+                            onCommitRequested: dockPage.commitDockLiquid()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     component DisplaySettingsPage: ColumnLayout {
@@ -951,11 +1088,16 @@ ApplicationWindow {
         }
 
         function applyState(state) {
-            if (!state || state.blurStrength === undefined
-                    || state.liquidStrength === undefined)
+            if (!state)
                 return
-            blurStrength = Math.max(0, Math.min(1, Number(state.blurStrength)))
-            liquidStrength = Math.max(0, Math.min(1, Number(state.liquidStrength)))
+            const rawBlur = state.globalBlurStrength !== undefined
+                ? state.globalBlurStrength : state.blurStrength
+            const rawLiquid = state.globalLiquidStrength !== undefined
+                ? state.globalLiquidStrength : state.liquidStrength
+            if (rawBlur === undefined || rawLiquid === undefined)
+                return
+            blurStrength = Math.max(0, Math.min(1, Number(rawBlur)))
+            liquidStrength = Math.max(0, Math.min(1, Number(rawLiquid)))
             blurDirty = false
             liquidDirty = false
             errorText = ""
@@ -977,7 +1119,7 @@ ApplicationWindow {
             repeat: false
             onTriggered: {
                 if (displayPage.bridge && displayPage.blurDirty) {
-                    displayPage.bridge.updateBlurStrength(displayPage.blurStrength)
+                    displayPage.bridge.updateGlobalBlurStrength(displayPage.blurStrength)
                 }
             }
         }
@@ -988,7 +1130,7 @@ ApplicationWindow {
             repeat: false
             onTriggered: {
                 if (displayPage.bridge && displayPage.liquidDirty) {
-                    displayPage.bridge.updateLiquidStrength(displayPage.liquidStrength)
+                    displayPage.bridge.updateGlobalLiquidStrength(displayPage.liquidStrength)
                 }
             }
         }
@@ -1007,7 +1149,7 @@ ApplicationWindow {
             if (!blurDirty || !bridge)
                 return
             blurDirty = false
-            applyState(bridge.updateBlurStrength(blurStrength))
+            applyState(bridge.updateGlobalBlurStrength(blurStrength))
             if (bridge.lastError)
                 errorText = bridge.lastError
         }
@@ -1026,7 +1168,7 @@ ApplicationWindow {
             if (!liquidDirty || !bridge)
                 return
             liquidDirty = false
-            applyState(bridge.updateLiquidStrength(liquidStrength))
+            applyState(bridge.updateGlobalLiquidStrength(liquidStrength))
             if (bridge.lastError)
                 errorText = bridge.lastError
         }
@@ -1447,7 +1589,7 @@ ApplicationWindow {
         readonly property var barVisibilityModes: ["always", "smart", "persistent"]
         property int barLayoutModeIndex: 0
         readonly property var barLayoutModes: ["full", "floating"]
-        property bool barBlurInheritDock: true
+        property bool barBlurInherit: true
         property real barBlurStrength: 0.42
         property real barLiquidStrength: 1.0
         property bool barBlurDirty: false
@@ -1473,7 +1615,9 @@ ApplicationWindow {
             barIntegratedWithDock = Boolean(state.barIntegratedWithDock)
             barVisibilityModeIndex = barVisibilityModeIndexFromString(state.barVisibilityMode)
             barLayoutModeIndex = barLayoutModeIndexFromString(state.barLayoutMode)
-            barBlurInheritDock = state.barBlurInheritDock !== undefined ? Boolean(state.barBlurInheritDock) : true
+            barBlurInherit = state.barBlurInherit !== undefined
+                ? Boolean(state.barBlurInherit)
+                : (state.barBlurInheritDock !== undefined ? Boolean(state.barBlurInheritDock) : true)
             barBlurStrength = Number.isFinite(Number(state.barBlurStrength)) ? Number(state.barBlurStrength) : 0.42
             barLiquidStrength = Number.isFinite(Number(state.barLiquidStrength)) ? Number(state.barLiquidStrength) : 1.0
             barBlurDirty = false
@@ -1756,19 +1900,19 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             spacing: 2
                             Text {
-                                text: "跟随 Dock 模糊效果"
+                                text: "跟随显示设置"
                                 color: theme.primaryText
                                 font.pixelSize: 14
                                 font.weight: Font.DemiBold
                             }
                             Text {
-                                text: "关闭后可为顶部栏单独自定义模糊与液态强度"
+                                text: "关闭后可为顶栏及控制中心单独自定义背景模糊与液态强度"
                                 color: theme.secondaryText
                                 font.pixelSize: 11
                             }
                         }
                         LiquidControls.LiquidGlassSwitch {
-                            checked: barPage.barBlurInheritDock
+                            checked: barPage.barBlurInherit
                             accentColor: "#30d158"
                             trackColor: theme.divider
                             onToggled: function(checked) {
@@ -1779,7 +1923,7 @@ ApplicationWindow {
                 }
 
                 Rectangle {
-                    visible: !barPage.barBlurInheritDock
+                    visible: !barPage.barBlurInherit
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.leftMargin: 53
@@ -1788,7 +1932,7 @@ ApplicationWindow {
                 }
 
                 Item {
-                    visible: !barPage.barBlurInheritDock
+                    visible: !barPage.barBlurInherit
                     width: parent.width
                     height: 48
                     RowLayout {
@@ -1798,7 +1942,7 @@ ApplicationWindow {
                         spacing: 12
                         SettingIcon { symbol: "◌"; tint: "#5ac8fa" }
                         Text {
-                            text: "Bar 模糊强度"
+                            text: "顶栏模糊强度"
                             color: theme.primaryText
                             font.pixelSize: 14
                         }
@@ -1823,7 +1967,7 @@ ApplicationWindow {
                 }
 
                 Rectangle {
-                    visible: !barPage.barBlurInheritDock
+                    visible: !barPage.barBlurInherit
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.leftMargin: 53
@@ -1832,7 +1976,7 @@ ApplicationWindow {
                 }
 
                 Item {
-                    visible: !barPage.barBlurInheritDock
+                    visible: !barPage.barBlurInherit
                     width: parent.width
                     height: 48
                     RowLayout {
@@ -1842,7 +1986,7 @@ ApplicationWindow {
                         spacing: 12
                         SettingIcon { symbol: "≈"; tint: "#af52de" }
                         Text {
-                            text: "Bar 液态强度"
+                            text: "顶栏液态强度"
                             color: theme.primaryText
                             font.pixelSize: 14
                         }
@@ -1907,7 +2051,7 @@ ApplicationWindow {
         property int fontWeightIndex: 0
         property string errorText: ""
 
-        property bool launcherBlurInheritDock: true
+        property bool launcherBlurInherit: true
         property real launcherBlurStrength: 0.42
         property real launcherLiquidStrength: 1.0
         property bool launcherBlurDirty: false
@@ -1919,8 +2063,9 @@ ApplicationWindow {
 
         function applyAppearanceSnapshot(snapshot) {
             if (!snapshot) return
-            launcherBlurInheritDock = snapshot.launcherBlurInheritDock !== undefined
-                ? Boolean(snapshot.launcherBlurInheritDock) : true
+            launcherBlurInherit = snapshot.launcherBlurInherit !== undefined
+                ? Boolean(snapshot.launcherBlurInherit)
+                : (snapshot.launcherBlurInheritDock !== undefined ? Boolean(snapshot.launcherBlurInheritDock) : true)
             launcherBlurStrength = Number.isFinite(Number(snapshot.launcherBlurStrength))
                 ? Number(snapshot.launcherBlurStrength) : 0.42
             launcherLiquidStrength = Number.isFinite(Number(snapshot.launcherLiquidStrength))
@@ -2344,7 +2489,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             spacing: 2
                             Text {
-                                text: "跟随 Dock 模糊效果"
+                                text: "跟随显示设置"
                                 color: theme.primaryText
                                 font.pixelSize: 14
                                 font.weight: Font.DemiBold
@@ -2356,7 +2501,7 @@ ApplicationWindow {
                             }
                         }
                         LiquidControls.LiquidGlassSwitch {
-                            checked: launcherPage.launcherBlurInheritDock
+                            checked: launcherPage.launcherBlurInherit
                             accentColor: "#30d158"
                             trackColor: theme.divider
                             onToggled: function(checked) {
@@ -2367,7 +2512,7 @@ ApplicationWindow {
                 }
 
                 Rectangle {
-                    visible: !launcherPage.launcherBlurInheritDock
+                    visible: !launcherPage.launcherBlurInherit
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.leftMargin: 53
@@ -2376,7 +2521,7 @@ ApplicationWindow {
                 }
 
                 Item {
-                    visible: !launcherPage.launcherBlurInheritDock
+                    visible: !launcherPage.launcherBlurInherit
                     width: parent.width
                     height: 48
                     RowLayout {
@@ -2411,7 +2556,7 @@ ApplicationWindow {
                 }
 
                 Rectangle {
-                    visible: !launcherPage.launcherBlurInheritDock
+                    visible: !launcherPage.launcherBlurInherit
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.leftMargin: 53
@@ -2420,7 +2565,7 @@ ApplicationWindow {
                 }
 
                 Item {
-                    visible: !launcherPage.launcherBlurInheritDock
+                    visible: !launcherPage.launcherBlurInherit
                     width: parent.width
                     height: 48
                     RowLayout {

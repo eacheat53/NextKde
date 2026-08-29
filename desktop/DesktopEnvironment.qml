@@ -106,13 +106,16 @@ Item {
 
         function snapshot(): string {
             return JSON.stringify({
+                globalBlurStrength: AppearanceConfigService.globalBlurStrength,
+                globalLiquidStrength: AppearanceConfigService.globalLiquidStrength,
+                dockBlurInherit: AppearanceConfigService.dockBlurInherit,
                 dockBlurStrength: AppearanceConfigService.dockBlurStrength,
                 dockLiquidStrength: AppearanceConfigService.dockLiquidStrength,
-                barBlurInheritDock: AppearanceConfigService.barBlurInheritDock,
+                barBlurInherit: AppearanceConfigService.barBlurInherit,
                 barBlurStrength: AppearanceConfigService.barBlurStrength,
                 barLiquidStrength: AppearanceConfigService.barLiquidStrength,
-                launcherBlurInheritDock:
-                    AppearanceConfigService.launcherBlurInheritDock,
+                launcherBlurInherit:
+                    AppearanceConfigService.launcherBlurInherit,
                 launcherBlurStrength:
                     AppearanceConfigService.launcherBlurStrength,
                 launcherLiquidStrength:
@@ -125,8 +128,11 @@ Item {
                     AppearanceConfigService.effectiveLauncherBlur,
                 effectiveLauncherLiquid:
                     AppearanceConfigService.effectiveLauncherLiquid,
-                blurStrength: AppearanceConfigService.dockBlurStrength,
-                liquidStrength: AppearanceConfigService.dockLiquidStrength,
+                // Backward compatibility aliases
+                barBlurInheritDock: AppearanceConfigService.barBlurInherit,
+                launcherBlurInheritDock: AppearanceConfigService.launcherBlurInherit,
+                blurStrength: AppearanceConfigService.globalBlurStrength,
+                liquidStrength: AppearanceConfigService.globalLiquidStrength,
                 shellStyle: AppearanceConfigService.shellStyle,
                 barIntegratedWithDock:
                     AppearanceConfigService.barIntegratedWithDock,
@@ -134,6 +140,21 @@ Item {
                 barLayoutMode: AppearanceConfigService.barLayoutMode,
                 tokenVersion: AppearanceTokens.version,
             })
+        }
+
+        function updateGlobalBlurStrength(value: real): string {
+            AppearanceConfigService.updateGlobalBlurStrength(value)
+            return snapshot()
+        }
+
+        function updateGlobalLiquidStrength(value: real): string {
+            AppearanceConfigService.updateGlobalLiquidStrength(value)
+            return snapshot()
+        }
+
+        function updateDockBlurInherit(enabled: bool): string {
+            AppearanceConfigService.updateDockBlurInherit(enabled)
+            return snapshot()
         }
 
         function updateDockBlurStrength(value: real): string {
@@ -147,12 +168,12 @@ Item {
         }
 
         function updateBlurStrength(value: real): string {
-            AppearanceConfigService.updateBlurStrength(value)
+            AppearanceConfigService.updateGlobalBlurStrength(value)
             return snapshot()
         }
 
         function updateLiquidStrength(value: real): string {
-            AppearanceConfigService.updateLiquidStrength(value)
+            AppearanceConfigService.updateGlobalLiquidStrength(value)
             return snapshot()
         }
 

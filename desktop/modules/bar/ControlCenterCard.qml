@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Wayland
 import QtQuick
 import qs.desktop.modules.common
+import qs.desktop.modules.dock
 
 // A single control-center card as an independent PanelWindow.
 //
@@ -28,7 +29,7 @@ PanelWindow {
     // Corner radius for the blur region and the visual border.
     property real cardRadius: 19
     // Visual card fill (above the blur).
-    property color cardColor: Qt.rgba(1, 1, 1, 0.10)
+    property color cardColor: ThemeService.backgroundColor
     property color cardBorderColor: Qt.rgba(1, 1, 1, 0.20)
     // PanelWindow has no opacity; this applies to the card body instead.
     property real cardOpacity: 1.0
@@ -101,6 +102,11 @@ PanelWindow {
         Math.round(root.cardRadius),
         Math.floor(Math.min(root.cardWidth, root.cardHeight) / 2)))
 
+    property real blurStrength: AppearanceConfigService.effectiveBarBlur
+    property real liquidStrength: AppearanceConfigService.effectiveBarLiquid
+    readonly property real effectiveBlur: Math.max(0.0, Math.min(1.0, blurStrength))
+    readonly property real effectiveLiquid: Math.max(0.0, Math.min(1.0, liquidStrength))
+
     // Blur region with the radius encoded explicitly, instead of
     // RoundedBlurRegion's ellipse scanlines (whose top-row inset is corrupted
     // by DPR scaling, making the plugin recover a smaller radius than QML
@@ -108,7 +114,10 @@ PanelWindow {
     // smoothQuickshellCard reads exactly this inset as the corner radius.
     // Everything below it is full-width so the card blurs completely and the
     // SDF mask rounds the corners to blurRadius.
-    BackgroundEffect.blurRegion: Region {
+    BackgroundEffect.blurRegion: (root.effectiveBlur > 0.005) ? cardBlurRegionHolder : null
+
+    Region {
+        id: cardBlurRegionHolder
         x: root.blurRadius
         y: 0
         width: root.cardWidth - root.blurRadius
@@ -121,16 +130,19 @@ PanelWindow {
         }
     }
 
-    // Card surface: transparent (blur shows through) + subtle tint/border.
-    // The radius MUST match blurRadius (the plugin's SDF mask), not the
-    // original float cardRadius, or the two edges separate into a visible
-    // aliased ring on small cards.
-    Rectangle {
-        id: cardBody
+    // Card surface: LiquidGlassSurface provides liquid finish, ambient wallpaper reflections,
+    // and responsive opacity tied to effectiveBlur and effectiveLiquid.
+    LiquidGlassSurface {
+        id: cardGlass
         anchors.fill: parent
         radius: root.blurRadius
-        color: root.cardColor
-        opacity: root.cardOpacity
+        baseColor: root.cardColor
+        surfaceOpacity: root.cardOpacity
+        blurStrength: root.effectiveBlur
+        liquidStrength: root.effectiveLiquid
+        ambientPrimary: WallpaperPaletteService.primary
+        ambientSecondary: WallpaperPaletteService.secondary
+        ambientStrength: 0.35 * AppearanceTokens.glass.ambientMultiplier
         border.width: 1
         border.color: root.cardBorderColor
 
