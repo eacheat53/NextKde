@@ -106,14 +106,43 @@ Item {
 
         function snapshot(): string {
             return JSON.stringify({
-                blurStrength: AppearanceConfigService.blurStrength,
-                liquidStrength: AppearanceConfigService.liquidStrength,
+                dockBlurStrength: AppearanceConfigService.dockBlurStrength,
+                dockLiquidStrength: AppearanceConfigService.dockLiquidStrength,
+                barBlurInheritDock: AppearanceConfigService.barBlurInheritDock,
+                barBlurStrength: AppearanceConfigService.barBlurStrength,
+                barLiquidStrength: AppearanceConfigService.barLiquidStrength,
+                launcherBlurInheritDock:
+                    AppearanceConfigService.launcherBlurInheritDock,
+                launcherBlurStrength:
+                    AppearanceConfigService.launcherBlurStrength,
+                launcherLiquidStrength:
+                    AppearanceConfigService.launcherLiquidStrength,
+                effectiveDockBlur: AppearanceConfigService.effectiveDockBlur,
+                effectiveDockLiquid: AppearanceConfigService.effectiveDockLiquid,
+                effectiveBarBlur: AppearanceConfigService.effectiveBarBlur,
+                effectiveBarLiquid: AppearanceConfigService.effectiveBarLiquid,
+                effectiveLauncherBlur:
+                    AppearanceConfigService.effectiveLauncherBlur,
+                effectiveLauncherLiquid:
+                    AppearanceConfigService.effectiveLauncherLiquid,
+                blurStrength: AppearanceConfigService.dockBlurStrength,
+                liquidStrength: AppearanceConfigService.dockLiquidStrength,
                 shellStyle: AppearanceConfigService.shellStyle,
                 barIntegratedWithDock:
                     AppearanceConfigService.barIntegratedWithDock,
                 barVisibilityMode: AppearanceConfigService.barVisibilityMode,
                 tokenVersion: AppearanceTokens.version,
             })
+        }
+
+        function updateDockBlurStrength(value: real): string {
+            AppearanceConfigService.updateDockBlurStrength(value)
+            return snapshot()
+        }
+
+        function updateDockLiquidStrength(value: real): string {
+            AppearanceConfigService.updateDockLiquidStrength(value)
+            return snapshot()
         }
 
         function updateBlurStrength(value: real): string {
@@ -123,6 +152,36 @@ Item {
 
         function updateLiquidStrength(value: real): string {
             AppearanceConfigService.updateLiquidStrength(value)
+            return snapshot()
+        }
+
+        function updateBarBlurInherit(enabled: bool): string {
+            AppearanceConfigService.updateBarBlurInherit(enabled)
+            return snapshot()
+        }
+
+        function updateBarBlurStrength(value: real): string {
+            AppearanceConfigService.updateBarBlurStrength(value)
+            return snapshot()
+        }
+
+        function updateBarLiquidStrength(value: real): string {
+            AppearanceConfigService.updateBarLiquidStrength(value)
+            return snapshot()
+        }
+
+        function updateLauncherBlurInherit(enabled: bool): string {
+            AppearanceConfigService.updateLauncherBlurInherit(enabled)
+            return snapshot()
+        }
+
+        function updateLauncherBlurStrength(value: real): string {
+            AppearanceConfigService.updateLauncherBlurStrength(value)
+            return snapshot()
+        }
+
+        function updateLauncherLiquidStrength(value: real): string {
+            AppearanceConfigService.updateLauncherLiquidStrength(value)
             return snapshot()
         }
 
@@ -143,6 +202,46 @@ Item {
 
         function resetStrengths(): string {
             AppearanceConfigService.resetStrengths()
+            return snapshot()
+        }
+    }
+
+    // AppLauncher settings endpoint for standalone Settings app and IPC clients.
+    IpcHandler {
+        target: "applauncher-settings"
+
+        function snapshot(): string {
+            return JSON.stringify({
+                displayMode: AppLauncherConfigService.displayMode,
+                iconSize: AppLauncherConfigService.iconSize,
+                iconSpacing: AppLauncherConfigService.iconSpacing,
+                fontSize: AppLauncherConfigService.fontSize,
+                fontWeight: AppLauncherConfigService.fontWeight,
+            })
+        }
+
+        function updateDisplayMode(mode: string): string {
+            AppLauncherConfigService.updateDisplayMode(mode)
+            return snapshot()
+        }
+
+        function updateIconSize(size: real): string {
+            AppLauncherConfigService.updateIconSize(size)
+            return snapshot()
+        }
+
+        function updateIconSpacing(spacing: real): string {
+            AppLauncherConfigService.updateIconSpacing(spacing)
+            return snapshot()
+        }
+
+        function updateFontSize(size: real): string {
+            AppLauncherConfigService.updateFontSize(size)
+            return snapshot()
+        }
+
+        function updateFontWeight(weight: string): string {
+            AppLauncherConfigService.updateFontWeight(weight)
             return snapshot()
         }
     }
