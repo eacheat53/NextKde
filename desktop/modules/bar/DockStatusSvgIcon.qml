@@ -14,7 +14,8 @@ Item {
     property bool useDockTint: false
     readonly property color iconColor: useDockTint
         && ConfigService.iconMode === "tint"
-        ? ConfigService.styledDockIconColor() : ThemeService.foregroundColor
+        ? ConfigService.styledDockIconColor()
+        : (ThemeService.isDark ? ThemeService.foregroundColor : "#000000")
     readonly property real appearanceOpacity: useDockTint
         && ConfigService.iconMode !== "color"
         ? ConfigService.iconOpacity : 1.0
