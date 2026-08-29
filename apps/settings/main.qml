@@ -63,6 +63,10 @@ ApplicationWindow {
             groups: []
         },
         {
+            subtitle: "顶栏",
+            groups: []
+        },
+        {
             subtitle: "Dock",
             groups: []
         },
@@ -1227,9 +1231,6 @@ ApplicationWindow {
         property var bridge: (typeof settingsBridge !== "undefined")
             ? settingsBridge : null
         property string shellStyle: "macos"
-        property bool barIntegratedWithDock: false
-        property int barVisibilityModeIndex: 0
-        readonly property var barVisibilityModes: ["always", "smart", "persistent"]
         property string errorText: ""
         readonly property var styles: [
             {
@@ -1252,37 +1253,15 @@ ApplicationWindow {
             }
         ]
 
-        property bool barBlurInheritDock: true
-        property real barBlurStrength: 0.42
-        property real barLiquidStrength: 1.0
-        property bool barBlurDirty: false
-        property bool barLiquidDirty: false
-
-        function percentage(value) {
-            return Math.round(value * 100) + "%"
-        }
-
         function isValidStyle(style) {
             return style === "windows12" || style === "macos"
                 || style === "material"
-        }
-
-        function barVisibilityModeIndexFromString(mode) {
-            const idx = barVisibilityModes.indexOf(mode)
-            return idx >= 0 ? idx : 0
         }
 
         function applyState(state) {
             if (!state || !isValidStyle(state.shellStyle))
                 return
             shellStyle = state.shellStyle
-            barIntegratedWithDock = Boolean(state.barIntegratedWithDock)
-            barVisibilityModeIndex = barVisibilityModeIndexFromString(state.barVisibilityMode)
-            barBlurInheritDock = state.barBlurInheritDock !== undefined ? Boolean(state.barBlurInheritDock) : true
-            barBlurStrength = Number.isFinite(Number(state.barBlurStrength)) ? Number(state.barBlurStrength) : 0.42
-            barLiquidStrength = Number.isFinite(Number(state.barLiquidStrength)) ? Number(state.barLiquidStrength) : 1.0
-            barBlurDirty = false
-            barLiquidDirty = false
             errorText = ""
         }
 
@@ -1302,6 +1281,228 @@ ApplicationWindow {
                 return
             }
             applyState(bridge.updateShellStyle(style))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        Component.onCompleted: refresh()
+
+        Text {
+            text: "界面形态".toUpperCase()
+            color: theme.secondaryText
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            Layout.leftMargin: 13
+        }
+
+        Repeater {
+            model: themePage.styles
+
+            delegate: Rectangle {
+                id: styleCard
+                required property var modelData
+
+                Layout.fillWidth: true
+                implicitHeight: 148
+                radius: 22
+                color: theme.card
+                border.width: themePage.shellStyle === modelData.id ? 2 : 1
+                border.color: themePage.shellStyle === modelData.id
+                    ? modelData.accent : theme.floatingBorder
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    spacing: 16
+
+                    Rectangle {
+                        Layout.preferredWidth: 156
+                        Layout.fillHeight: true
+                        radius: 14
+                        color: theme.previewPane
+                        clip: true
+
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            height: 14
+                            color: theme.previewBar
+                            visible: styleCard.modelData.id !== "windows12"
+
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 8
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 14
+                                height: 4
+                                radius: 2
+                                color: styleCard.modelData.accent
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: styleCard.modelData.id === "macos" ? 8 : 0
+                            width: styleCard.modelData.id === "windows12"
+                                ? parent.width : (styleCard.modelData.id === "macos" ? 112 : 92)
+                            height: styleCard.modelData.id === "windows12" ? 18 : 16
+                            radius: styleCard.modelData.id === "windows12"
+                                ? 0 : (styleCard.modelData.id === "macos" ? 8 : 4)
+                            color: styleCard.modelData.id === "windows12"
+                                ? theme.previewTaskbar : theme.previewDock
+
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 4
+
+                                Repeater {
+                                    model: 4
+                                    Rectangle {
+                                        width: 8
+                                        height: 8
+                                        radius: styleCard.modelData.id === "macos" ? 4 : 2
+                                        color: index === 0
+                                            ? styleCard.modelData.accent : theme.previewIcon
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        spacing: 6
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Text {
+                                text: styleCard.modelData.name
+                                color: theme.primaryText
+                                font.pixelSize: 17
+                                font.weight: Font.Bold
+                            }
+
+                            Rectangle {
+                                visible: themePage.shellStyle === styleCard.modelData.id
+                                Layout.preferredWidth: 46
+                                Layout.preferredHeight: 20
+                                radius: 10
+                                color: Qt.rgba(0.04, 0.52, 1, 0.16)
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "当前"
+                                    color: styleCard.modelData.accent
+                                    font.pixelSize: 11
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: styleCard.modelData.description
+                            color: theme.secondaryText
+                            font.pixelSize: 13
+                            wrapMode: Text.Wrap
+                        }
+
+                        Item { Layout.fillHeight: true }
+
+                        Text {
+                            text: themePage.shellStyle === styleCard.modelData.id
+                                ? "已应用到桌面" : "点击切换此形态"
+                            color: themePage.shellStyle === styleCard.modelData.id
+                                ? styleCard.modelData.accent : theme.tertiaryText
+                            font.pixelSize: 12
+                            font.weight: Font.Medium
+                        }
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: themePage.selectStyle(styleCard.modelData.id)
+                }
+            }
+        }
+
+        Text {
+            Layout.fillWidth: true
+            Layout.leftMargin: 13
+            Layout.rightMargin: 13
+            text: "选择界面形态会立即切换桌面组件的圆角、间距与表面质感规范。"
+            color: theme.secondaryText
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+        }
+
+        Text {
+            Layout.fillWidth: true
+            Layout.leftMargin: 13
+            Layout.rightMargin: 13
+            visible: themePage.errorText.length > 0
+            text: themePage.errorText
+            color: "#ff453a"
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+        }
+    }
+
+    component BarSettingsPage: ColumnLayout {
+        id: barPage
+
+        Layout.fillWidth: true
+        spacing: 10
+
+        property var bridge: (typeof settingsBridge !== "undefined")
+            ? settingsBridge : null
+        property bool barIntegratedWithDock: false
+        property int barVisibilityModeIndex: 0
+        readonly property var barVisibilityModes: ["always", "smart", "persistent"]
+        property bool barBlurInheritDock: true
+        property real barBlurStrength: 0.42
+        property real barLiquidStrength: 1.0
+        property bool barBlurDirty: false
+        property bool barLiquidDirty: false
+        property string errorText: ""
+
+        function percentage(value) {
+            return Math.round(value * 100) + "%"
+        }
+
+        function barVisibilityModeIndexFromString(mode) {
+            const idx = barVisibilityModes.indexOf(mode)
+            return idx >= 0 ? idx : 0
+        }
+
+        function applyState(state) {
+            if (!state) return
+            barIntegratedWithDock = Boolean(state.barIntegratedWithDock)
+            barVisibilityModeIndex = barVisibilityModeIndexFromString(state.barVisibilityMode)
+            barBlurInheritDock = state.barBlurInheritDock !== undefined ? Boolean(state.barBlurInheritDock) : true
+            barBlurStrength = Number.isFinite(Number(state.barBlurStrength)) ? Number(state.barBlurStrength) : 0.42
+            barLiquidStrength = Number.isFinite(Number(state.barLiquidStrength)) ? Number(state.barLiquidStrength) : 1.0
+            barBlurDirty = false
+            barLiquidDirty = false
+            errorText = ""
+        }
+
+        function refresh() {
+            if (!bridge) {
+                errorText = "尚未构建 Settings 桥接程序"
+                return
+            }
+            applyState(bridge.appearanceSnapshot())
             if (bridge.lastError)
                 errorText = bridge.lastError
         }
@@ -1337,8 +1538,8 @@ ApplicationWindow {
             interval: 60
             repeat: false
             onTriggered: {
-                if (themePage.bridge && themePage.barBlurDirty) {
-                    themePage.bridge.updateBarBlurStrength(themePage.barBlurStrength)
+                if (barPage.bridge && barPage.barBlurDirty) {
+                    barPage.bridge.updateBarBlurStrength(barPage.barBlurStrength)
                 }
             }
         }
@@ -1348,8 +1549,8 @@ ApplicationWindow {
             interval: 60
             repeat: false
             onTriggered: {
-                if (themePage.bridge && themePage.barLiquidDirty) {
-                    themePage.bridge.updateBarLiquidStrength(themePage.barLiquidStrength)
+                if (barPage.bridge && barPage.barLiquidDirty) {
+                    barPage.bridge.updateBarLiquidStrength(barPage.barLiquidStrength)
                 }
             }
         }
@@ -1395,184 +1596,21 @@ ApplicationWindow {
         Component.onCompleted: refresh()
 
         Text {
-            text: "界面形态".toUpperCase()
+            text: "显示与布局".toUpperCase()
             color: theme.secondaryText
             font.pixelSize: 12
             font.weight: Font.DemiBold
             Layout.leftMargin: 13
-        }
-
-        Repeater {
-            model: themePage.styles
-
-            delegate: Rectangle {
-                id: styleCard
-                required property var modelData
-
-                Layout.fillWidth: true
-                implicitHeight: 148
-                radius: 22
-                color: theme.card
-                border.width: themePage.shellStyle === modelData.id ? 2 : 1
-                border.color: themePage.shellStyle === modelData.id
-                    ? modelData.accent : theme.floatingBorder
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: 14
-                    spacing: 18
-
-                    Rectangle {
-                        Layout.preferredWidth: 226
-                        Layout.fillHeight: true
-                        radius: 14
-                        color: theme.dark ? "#101216" : "#e9edf4"
-                        clip: true
-
-                        Rectangle {
-                            x: 18
-                            y: 24
-                            width: 78
-                            height: 45
-                            radius: modelData.id === "windows12" ? 8
-                                : modelData.id === "material" ? 14 : 20
-                            color: Qt.alpha(modelData.accent, 0.22)
-                            border.width: 1
-                            border.color: Qt.alpha(modelData.accent, 0.32)
-                        }
-                        Rectangle {
-                            x: 104
-                            y: 24
-                            width: 52
-                            height: 45
-                            radius: modelData.id === "windows12" ? 8
-                                : modelData.id === "material" ? 14 : 20
-                            color: theme.dark ? "#2d3038" : "#ffffff"
-                            opacity: 0.88
-                        }
-
-                        Rectangle {
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.top: modelData.id === "windows12"
-                                ? undefined : parent.top
-                            anchors.bottom: modelData.id === "windows12"
-                                ? parent.bottom : undefined
-                            height: modelData.id === "windows12" ? 28 : 10
-                            color: modelData.id === "material"
-                                ? Qt.alpha(modelData.accent, 0.24)
-                                : (theme.dark ? "#30333b" : "#f8f9fc")
-                            opacity: modelData.id === "macos" ? 0.70 : 0.94
-                        }
-
-                        Rectangle {
-                            visible: modelData.id !== "windows12"
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            anchors.bottom: parent.bottom
-                            anchors.bottomMargin: 7
-                            width: modelData.id === "macos" ? 116 : 142
-                            height: 26
-                            radius: modelData.id === "macos" ? 13 : 10
-                            color: modelData.id === "material"
-                                ? Qt.alpha(modelData.accent, 0.38)
-                                : (theme.dark ? "#454952" : "#ffffff")
-                            border.width: 1
-                            border.color: Qt.alpha("#ffffff", 0.25)
-                        }
-
-                        Row {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            anchors.bottom: parent.bottom
-                            anchors.bottomMargin: modelData.id === "windows12" ? 7 : 13
-                            spacing: 7
-                            Repeater {
-                                model: 5
-                                delegate: Rectangle {
-                                    width: 10
-                                    height: 10
-                                    radius: styleCard.modelData.id === "material" ? 3 : 5
-                                    color: index === 2
-                                        ? styleCard.modelData.accent
-                                        : (theme.dark ? "#d9dce3" : "#58606c")
-                                }
-                            }
-                        }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 5
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text {
-                                Layout.fillWidth: true
-                                text: modelData.name
-                                color: theme.primaryText
-                                font.pixelSize: 17
-                                font.weight: Font.DemiBold
-                            }
-                            Rectangle {
-                                visible: themePage.shellStyle === modelData.id
-                                width: 24
-                                height: 24
-                                radius: 12
-                                color: modelData.accent
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "✓"
-                                    color: "white"
-                                    font.pixelSize: 13
-                                    font.weight: Font.Bold
-                                }
-                            }
-                        }
-                        Text {
-                            Layout.fillWidth: true
-                            text: modelData.description
-                            color: theme.secondaryText
-                            font.pixelSize: 12
-                            wrapMode: Text.Wrap
-                        }
-                        Item { Layout.fillHeight: true }
-                        Text {
-                            text: themePage.shellStyle === modelData.id
-                                ? "当前形态" : "选择此形态"
-                            color: modelData.accent
-                            font.pixelSize: 12
-                            font.weight: Font.DemiBold
-                        }
-                    }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: themePage.selectStyle(styleCard.modelData.id)
-                }
-            }
-        }
-
-        Text {
-            text: "BAR 布局"
-            color: theme.secondaryText
-            font.pixelSize: 12
-            font.weight: Font.DemiBold
-            Layout.leftMargin: 13
-            Layout.topMargin: 4
         }
 
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: barLayoutCol.implicitHeight
+            implicitHeight: 119
             radius: 18
             color: theme.card
 
             Column {
-                id: barLayoutCol
-                anchors.left: parent.left
-                anchors.right: parent.right
+                anchors.fill: parent
 
                 Item {
                     width: parent.width
@@ -1598,9 +1636,9 @@ ApplicationWindow {
                                 { id: "persistent", label: "持续隐藏" }
                             ]
                             itemWidthOverride: 76
-                            currentIndex: themePage.barVisibilityModeIndex
+                            currentIndex: barPage.barVisibilityModeIndex
                             onSelectionChanged: function(index) {
-                                themePage.saveBarVisibilityMode(index)
+                                barPage.saveBarVisibilityMode(index)
                             }
                         }
                     }
@@ -1639,23 +1677,37 @@ ApplicationWindow {
                             }
                         }
                         LiquidControls.LiquidGlassSwitch {
-                            checked: themePage.barIntegratedWithDock
+                            checked: barPage.barIntegratedWithDock
                             accentColor: "#0a84ff"
                             trackColor: theme.divider
                             onToggled: function(checked) {
-                                themePage.setBarIntegratedWithDock(checked)
+                                barPage.setBarIntegratedWithDock(checked)
                             }
                         }
                     }
                 }
+            }
+        }
 
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.leftMargin: 53
-                    height: 1
-                    color: theme.separator
-                }
+        Text {
+            text: "外观与模糊效果".toUpperCase()
+            color: theme.secondaryText
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            Layout.leftMargin: 13
+            Layout.topMargin: 4
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: barBlurCol.implicitHeight
+            radius: 18
+            color: theme.card
+
+            Column {
+                id: barBlurCol
+                anchors.left: parent.left
+                anchors.right: parent.right
 
                 Item {
                     width: parent.width
@@ -1682,18 +1734,18 @@ ApplicationWindow {
                             }
                         }
                         LiquidControls.LiquidGlassSwitch {
-                            checked: themePage.barBlurInheritDock
+                            checked: barPage.barBlurInheritDock
                             accentColor: "#30d158"
                             trackColor: theme.divider
                             onToggled: function(checked) {
-                                themePage.setBarBlurInherit(checked)
+                                barPage.setBarBlurInherit(checked)
                             }
                         }
                     }
                 }
 
                 Rectangle {
-                    visible: !themePage.barBlurInheritDock
+                    visible: !barPage.barBlurInheritDock
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.leftMargin: 53
@@ -1702,7 +1754,7 @@ ApplicationWindow {
                 }
 
                 Item {
-                    visible: !themePage.barBlurInheritDock
+                    visible: !barPage.barBlurInheritDock
                     width: parent.width
                     height: 48
                     RowLayout {
@@ -1718,7 +1770,7 @@ ApplicationWindow {
                         }
                         Item { Layout.fillWidth: true }
                         Text {
-                            text: themePage.percentage(themePage.barBlurStrength)
+                            text: barPage.percentage(barPage.barBlurStrength)
                             color: theme.secondaryText
                             font.pixelSize: 12
                             Layout.preferredWidth: 38
@@ -1726,18 +1778,18 @@ ApplicationWindow {
                         }
                         LiquidControls.LiquidSlider {
                             Layout.preferredWidth: 190
-                            value: themePage.barBlurStrength
+                            value: barPage.barBlurStrength
                             trackColor: theme.divider
                             onPreviewChanged: function(position) {
-                                themePage.previewBarBlur(position)
+                                barPage.previewBarBlur(position)
                             }
-                            onCommitRequested: themePage.commitBarBlur()
+                            onCommitRequested: barPage.commitBarBlur()
                         }
                     }
                 }
 
                 Rectangle {
-                    visible: !themePage.barBlurInheritDock
+                    visible: !barPage.barBlurInheritDock
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.leftMargin: 53
@@ -1746,7 +1798,7 @@ ApplicationWindow {
                 }
 
                 Item {
-                    visible: !themePage.barBlurInheritDock
+                    visible: !barPage.barBlurInheritDock
                     width: parent.width
                     height: 48
                     RowLayout {
@@ -1756,13 +1808,7 @@ ApplicationWindow {
                         spacing: 12
                         SettingIcon { symbol: "≈"; tint: "#af52de" }
                         Text {
-                            text: "Bar 液态强度"
-                            color: theme.primaryText
-                            font.pixelSize: 14
-                        }
-                        Item { Layout.fillWidth: true }
-                        Text {
-                            text: themePage.percentage(themePage.barLiquidStrength)
+                            text: barPage.percentage(barPage.barLiquidStrength)
                             color: theme.secondaryText
                             font.pixelSize: 12
                             Layout.preferredWidth: 38
@@ -1770,12 +1816,12 @@ ApplicationWindow {
                         }
                         LiquidControls.LiquidSlider {
                             Layout.preferredWidth: 190
-                            value: themePage.barLiquidStrength
+                            value: barPage.barLiquidStrength
                             trackColor: theme.divider
                             onPreviewChanged: function(position) {
-                                themePage.previewBarLiquid(position)
+                                barPage.previewBarLiquid(position)
                             }
-                            onCommitRequested: themePage.commitBarLiquid()
+                            onCommitRequested: barPage.commitBarLiquid()
                         }
                     }
                 }
@@ -1786,7 +1832,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.leftMargin: 13
             Layout.rightMargin: 13
-            text: "主题会立即更新 Dock。Bar 保持统一外观，可通过上方开关选择独立顶栏或底部统一宿主。"
+            text: "Bar 保持通透液态外观，可在上方选择跟随 Dock 模糊基准或在此独立定制。"
             color: theme.secondaryText
             font.pixelSize: 12
             wrapMode: Text.Wrap
@@ -1796,8 +1842,8 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.leftMargin: 13
             Layout.rightMargin: 13
-            visible: themePage.errorText.length > 0
-            text: themePage.errorText
+            visible: barPage.errorText.length > 0
+            text: barPage.errorText
             color: "#ff453a"
             font.pixelSize: 12
             wrapMode: Text.Wrap
@@ -2461,6 +2507,15 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.topMargin: 1
                     pageIndex: 2
+                    label: "顶栏"
+                    navSymbol: "⎍"
+                    navTint: "#5ac8fa"
+                }
+
+                SidebarEntry {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 1
+                    pageIndex: 3
                     label: "Dock"
                     navSymbol: "▰"
                     navTint: "#0a84ff"
@@ -2469,7 +2524,7 @@ ApplicationWindow {
                 SidebarEntry {
                     Layout.fillWidth: true
                     Layout.topMargin: 1
-                    pageIndex: 3
+                    pageIndex: 4
                     label: "启动台"
                     navSymbol: "❖"
                     navTint: "#ff9500"
@@ -2517,7 +2572,7 @@ ApplicationWindow {
                         Layout.bottomMargin: 18
                     }
                     Repeater {
-                        model: (window.currentPage >= 0 && window.currentPage <= 3)
+                        model: (window.currentPage >= 0 && window.currentPage <= 4)
                             ? [] : window.contentByPage[window.currentPage].groups
                         delegate: ColumnLayout {
                             required property var modelData
@@ -2549,10 +2604,14 @@ ApplicationWindow {
                     }
 
                     LauncherSettingsPage {
-                        visible: window.currentPage === 3
+                        visible: window.currentPage === 4
                     }
 
                     DockSettingsPage {
+                        visible: window.currentPage === 3
+                    }
+
+                    BarSettingsPage {
                         visible: window.currentPage === 2
                     }
 

@@ -298,22 +298,24 @@ QtObject {
     }
 
     function _syncGlassEffect() {
-        const blurLevel = Math.round(1 + service.dockBlurStrength * 14)
-        const refractionLevel = Math.round(service.dockLiquidStrength * 20)
+        const dockBlurLevel = Math.round(1 + service.effectiveDockBlur * 14)
+        const contentBlurLevel = Math.round(1 + (service.launcherBlurInheritDock ? service.effectiveDockBlur : service.effectiveLauncherBlur) * 14)
+        const refractionLevel = Math.round(service.effectiveDockLiquid * 20)
         const process = _makeProcess([
             "sh", "-c",
             "kwriteconfig6 --file kwinrc --group Effect-blurplus --key BlurStrength \"$1\" && "
-                + "kwriteconfig6 --file kwinrc --group Effect-blurplus --key DockBlurStrength \"$1\" && "
-                + "kwriteconfig6 --file kwinrc --group Effect-blurplus --key RefractionStrength \"$2\" && "
+                + "kwriteconfig6 --file kwinrc --group Effect-blurplus --key DockBlurStrength \"$2\" && "
+                + "kwriteconfig6 --file kwinrc --group Effect-blurplus --key RefractionStrength \"$3\" && "
                 + "kwriteconfig6 --file kwinrc --group Effect-blur --key BlurStrength \"$1\" && "
-                + "if [ \"$(qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.isEffectLoaded glass 2>/dev/null)\" != \"true\" ]; then "
+                + "if [ \"$(qdbus6 org.kde.KWin /Effects org.kde.KWin.Effects.isEffectLoaded glass 2>/dev/null)\" != \"true\" ]; then "
                 + "  qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.unloadEffect blur 2>/dev/null; "
                 + "  qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.loadEffect glass 2>/dev/null; "
                 + "fi; "
                 + "qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.reconfigureEffect glass 2>/dev/null || "
                 + "qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.reconfigureEffect blur 2>/dev/null",
             "appearance-glass-sync",
-            String(blurLevel),
+            String(contentBlurLevel),
+            String(dockBlurLevel),
             String(refractionLevel),
         ])
         if (!process)
@@ -323,8 +325,8 @@ QtObject {
                 console.warn("[AppearanceConfig] Glass effect sync failed code="
                     + code + " stderr=" + (process.stderr?.text ?? ""))
             } else {
-                console.log("[AppearanceConfig] Glass effect blur=" + blurLevel
-                    + " liquid=" + refractionLevel)
+                console.log("[AppearanceConfig] Glass effect dockBlur=" + dockBlurLevel
+                    + " contentBlur=" + contentBlurLevel + " liquid=" + refractionLevel)
             }
             process.destroy()
         })

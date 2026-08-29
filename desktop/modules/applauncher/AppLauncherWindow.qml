@@ -759,6 +759,7 @@ PanelWindow {
             baseColor: root.isDark ? Qt.rgba(0, 0, 0, 0.22) : Qt.rgba(1, 1, 1, 0.35)
             surfaceOpacity: 1.0
             materialDepth: 1.0
+            blurStrength: AppearanceConfigService.effectiveLauncherBlur
             liquidStrength: AppearanceConfigService.effectiveLauncherLiquid
             ambientPrimary: WallpaperPaletteService.primary
             ambientSecondary: WallpaperPaletteService.secondary
@@ -1133,6 +1134,7 @@ PanelWindow {
                     baseColor: root.isDark
                         ? Qt.rgba(0.08, 0.09, 0.12, 0.35)
                         : Qt.rgba(0.95, 0.95, 0.98, 0.45)
+                    blurStrength: AppearanceConfigService.effectiveLauncherBlur
                     liquidStrength: AppearanceConfigService.effectiveLauncherLiquid
                     ambientPrimary: WallpaperPaletteService.primary
                     ambientSecondary: WallpaperPaletteService.secondary

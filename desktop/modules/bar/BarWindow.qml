@@ -75,6 +75,7 @@ PanelWindow {
             visible: AppearanceConfigService.barVisibilityMode !== "always"
             baseColor: ThemeService.backgroundColor
             surfaceOpacity: 1.0
+            blurStrength: AppearanceConfigService.effectiveBarBlur
             liquidStrength: AppearanceConfigService.effectiveBarLiquid
             ambientPrimary: WallpaperPaletteService.primary
             ambientSecondary: WallpaperPaletteService.secondary

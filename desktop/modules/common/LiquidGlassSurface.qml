@@ -25,6 +25,9 @@ Rectangle {
     property color _displayAmbientSecondary: ambientSecondary
     // 0 = dock/base surface, 1 = popup, 2 = contextual foreground menu.
     property real materialDepth: 0.0
+    property real blurStrength: AppearanceConfigService.effectiveDockBlur
+    readonly property real normalizedBlurStrength: Math.max(
+        0.0, Math.min(1.0, blurStrength))
     property real liquidStrength: AppearanceConfigService.effectiveDockLiquid
     readonly property real normalizedLiquidStrength: Math.max(
         0.0, Math.min(1.0, liquidStrength))
@@ -93,7 +96,7 @@ Rectangle {
         baseColor.r * (1.0 - ambientBaseMix) + _displayAmbientPrimary.r * ambientBaseMix,
         baseColor.g * (1.0 - ambientBaseMix) + _displayAmbientPrimary.g * ambientBaseMix,
         baseColor.b * (1.0 - ambientBaseMix) + _displayAmbientPrimary.b * ambientBaseMix,
-        baseColor.a * surfaceOpacity
+        baseColor.a * surfaceOpacity * (0.80 + 0.40 * normalizedBlurStrength)
     )
 
     // A soft top reflection gives the surface depth without a hard border.
