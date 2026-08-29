@@ -78,7 +78,22 @@ Item {
         anchorLeft: panel.dockHosted && panel.dockEdge === "left"
     }
 
+    property bool _internalTransition: false
+
+    Timer {
+        id: transitionGuardTimer
+        interval: 350
+        repeat: false
+        onTriggered: panel._internalTransition = false
+    }
+
+    function _triggerTransitionGuard() {
+        panel._internalTransition = true
+        transitionGuardTimer.restart()
+    }
+
     onSessionModalVisibleChanged: {
+        _triggerTransitionGuard()
         coordinator.suspended = panel.sessionModalVisible
         if (!panel.sessionModalVisible) {
             panel.pendingConfirmAction = ""
@@ -87,18 +102,69 @@ Item {
 
     function toggle(item) {
         anchorItem = item
-        if (coordinator.open) {
+        _triggerTransitionGuard()
+        if (coordinator.open || panel.sessionModalVisible) {
             close()
         } else {
+            panel.sessionModalVisible = false
+            panel.pendingConfirmAction = ""
+            coordinator.suspended = false
             ControlCenterService.refresh()
             coordinator.openAll()
         }
     }
     function close() {
+        _triggerTransitionGuard()
         sessionModalVisible = false
         pendingConfirmAction = ""
         coordinator.suspended = false
         coordinator.closeAll()
+    }
+
+    // Fullscreen transparent click-catcher window mapped ONLY while the control center is open.
+    // Clicking anywhere outside the control center cards instantly dismisses it.
+    PanelWindow {
+        id: dismissalBackdrop
+        screen: panel.targetScreen
+        visible: coordinator.open || panel.sessionModalVisible
+        color: "transparent"
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.layer: WlrLayer.Top
+        WlrLayershell.namespace: "quickshell-controlcenter-backdrop"
+
+        anchors {
+            top: true
+            bottom: true
+            left: true
+            right: true
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.ArrowCursor
+            onPressed: panel.close()
+        }
+    }
+
+    Connections {
+        target: WindowService
+        function onActiveWindowIdChanged() {
+            if (!panel._internalTransition && (coordinator.open || panel.sessionModalVisible)) {
+                panel.close()
+            }
+        }
+    }
+
+    Shortcut {
+        sequence: "Escape"
+        enabled: coordinator.open || panel.sessionModalVisible
+        onActivated: {
+            if (panel.sessionModalVisible) {
+                panel.sessionModalVisible = false
+            } else {
+                panel.close()
+            }
+        }
     }
 
     // ── Card 1: Wi-Fi ────────────────────────────────────────────────
@@ -418,11 +484,44 @@ Item {
         MouseArea { id: screenshotPointer; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: ControlCenterService.captureInteractiveScreenshot() }
     }
 
-    // ── Card 5: Power & Session ──────────────────────────────────────
+    // ── Card 5: Dark Mode / Theme Toggle ─────────────────────────────
     ControlCenterCard {
         coordinator: coordinator
         offsetTop: 155
         offsetRight: 198
+        cardRadius: 27
+        cardWidth: 54
+        cardHeight: 54
+        cardBorderColor: ThemeService.isDark ? "#0a84ff" : (ThemeService.isDark ? Qt.rgba(1, 1, 1, 0.24) : Qt.rgba(0, 0, 0, 0.10))
+        blurStrength: panel.effectiveBlur
+        liquidStrength: panel.effectiveLiquid
+
+        cardScale: themePointer.pressed ? 0.91 : (themePointer.containsMouse ? 1.06 : 1.0)
+        Behavior on cardScale { NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
+        Text {
+            anchors.centerIn: parent
+            text: ThemeService.isDark ? "☾" : "☼"
+            color: ThemeService.isDark ? "#0a84ff" : ThemeService.foregroundColor
+            style: ThemeService.isDark ? Text.Outline : Text.Normal
+            styleColor: Qt.rgba(0, 0, 0, 0.50)
+            font.pixelSize: 22
+            font.weight: Font.Bold
+        }
+        MouseArea {
+            id: themePointer
+            anchors.fill: parent
+            hoverEnabled: true
+            enabled: !ControlCenterService.themeChangeInProgress
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: ControlCenterService.toggleDarkMode()
+        }
+    }
+
+    // ── Card 6: Power & Session ──────────────────────────────────────
+    ControlCenterCard {
+        coordinator: coordinator
+        offsetTop: 155
+        offsetRight: 134
         cardRadius: 27
         cardWidth: 54
         cardHeight: 54
@@ -460,13 +559,13 @@ Item {
         }
     }
 
-    // ── Card 6: Do Not Disturb ───────────────────────────────────────
+    // ── Card 7: Do Not Disturb ───────────────────────────────────────
     ControlCenterCard {
         coordinator: coordinator
         offsetTop: 155
         offsetRight: 20
         cardRadius: 27
-        cardWidth: 168
+        cardWidth: 104
         cardHeight: 54
         cardBorderColor: ControlCenterService.doNotDisturbEnabled
             ? "#0a84ff" : (ThemeService.isDark ? Qt.rgba(1, 1, 1, 0.24) : Qt.rgba(0, 0, 0, 0.10))
@@ -476,9 +575,9 @@ Item {
         cardScale: dndPointer.pressed ? 0.97 : (dndPointer.containsMouse ? 1.025 : 1.0)
         Behavior on cardScale { NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
         Image {
-            anchors { left: parent.left; leftMargin: 18; verticalCenter: parent.verticalCenter }
-            width: 23
-            height: 23
+            anchors { left: parent.left; leftMargin: 14; verticalCenter: parent.verticalCenter }
+            width: 21
+            height: 21
             source: "../../assets/do-not-disturb.svg"
             sourceSize.width: 46
             sourceSize.height: 46
@@ -492,8 +591,8 @@ Item {
             }
         }
         Text {
-            anchors { left: parent.left; leftMargin: 51; verticalCenter: parent.verticalCenter }
-            text: "勿扰模式"
+            anchors { left: parent.left; leftMargin: 42; verticalCenter: parent.verticalCenter }
+            text: "勿扰"
             color: ThemeService.foregroundColor
             style: ThemeService.isDark ? Text.Outline : Text.Normal
             styleColor: Qt.rgba(0, 0, 0, 0.50)

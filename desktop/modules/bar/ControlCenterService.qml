@@ -464,7 +464,7 @@ QtObject {
         sessionActionInProgress = true
         lastSessionError = ""
         const proc = processFactory.createObject(service, {
-            command: ["sh", "-c", "dm-tool switch-to-greeter 2>/dev/null || qdbus6 org.kde.ksmserver /KSMServer org.kde.KSMServerInterface.openSwitchUser 2>/dev/null || loginctl lock-session 2>/dev/null"]
+            command: ["sh", "-c", "dm-tool switch-to-greeter 2>/dev/null || ( [ -n \"$XDG_SEAT_PATH\" ] && qdbus6 --system org.freedesktop.DisplayManager \"$XDG_SEAT_PATH\" org.freedesktop.DisplayManager.Seat.SwitchToGreeter 2>/dev/null ) || qdbus6 --system org.freedesktop.DisplayManager /org/freedesktop/DisplayManager/Seat0 org.freedesktop.DisplayManager.Seat.SwitchToGreeter 2>/dev/null || loginctl lock-session \"${XDG_SESSION_ID:-self}\" 2>/dev/null || qdbus6 org.freedesktop.ScreenSaver /ScreenSaver Lock 2>/dev/null"]
         })
         proc.exited.connect(function(code) {
             service.sessionActionInProgress = false
@@ -491,6 +491,78 @@ QtObject {
             if (code !== 0) {
                 service.lastSessionError = "注销失败"
             }
+            proc.destroy()
+        })
+        proc.running = true
+        return true
+    }
+
+    property bool themeChangeInProgress: false
+
+    function toggleDarkMode() {
+        if (themeChangeInProgress)
+            return false
+        themeChangeInProgress = true
+        const pyScript = "import subprocess\n"
+            + "def get_cfg(f, g, k):\n"
+            + "    res = subprocess.run(['kreadconfig6', '--file', f, '--group', g, '--key', k], capture_output=True, text=True)\n"
+            + "    return res.stdout.strip()\n"
+            + "curr_lnf = get_cfg('kdeglobals', 'KDE', 'LookAndFeelPackage')\n"
+            + "curr_scheme = get_cfg('kdeglobals', 'General', 'ColorScheme')\n"
+            + "lnfs_proc = subprocess.run(['plasma-apply-lookandfeel', '-l'], capture_output=True, text=True)\n"
+            + "installed = [l.strip() for l in lnfs_proc.stdout.splitlines() if l.strip()]\n"
+            + "is_dark = '-d' in curr_lnf.lower() or 'dark' in curr_lnf.lower() or 'dark' in curr_scheme.lower()\n"
+            + "target_dark = not is_dark\n"
+            + "def find_partner(theme, to_dark):\n"
+            + "    if not theme: return None\n"
+            + "    cands = []\n"
+            + "    if to_dark:\n"
+            + "        if theme.endswith('-w'): cands.append(theme[:-2] + '-d')\n"
+            + "        if theme.endswith('_w'): cands.append(theme[:-2] + '_d')\n"
+            + "        if theme.endswith('Light'): cands.append(theme[:-5] + 'Dark')\n"
+            + "        if theme.endswith('-Light'): cands.append(theme[:-6] + '-Dark')\n"
+            + "        if theme.endswith('_Light'): cands.append(theme[:-6] + '_Dark')\n"
+            + "        if 'light' in theme.lower(): cands.append(theme.replace('light', 'dark').replace('Light', 'Dark'))\n"
+            + "        if theme.endswith('.desktop'):\n"
+            + "            base = theme[:-8]\n"
+            + "            cands.extend([base + 'dark.desktop', base + '-dark.desktop', base + 'Dark.desktop'])\n"
+            + "        cands.extend([theme + '-Dark', theme + 'Dark', theme + '-d'])\n"
+            + "    else:\n"
+            + "        if theme.endswith('-d'): cands.append(theme[:-2] + '-w')\n"
+            + "        if theme.endswith('_d'): cands.append(theme[:-2] + '_w')\n"
+            + "        if theme.endswith('Dark'): cands.extend([theme[:-4] + 'Light', theme[:-4]])\n"
+            + "        if theme.endswith('-Dark'): cands.extend([theme[:-5] + '-Light', theme[:-5]])\n"
+            + "        if theme.endswith('_Dark'): cands.extend([theme[:-5] + '_Light', theme[:-5]])\n"
+            + "        if 'dark' in theme.lower(): cands.append(theme.replace('dark', 'light').replace('Dark', 'Light'))\n"
+            + "        if theme.endswith('dark.desktop'): cands.extend([theme[:-12] + '.desktop', theme[:-12] + 'light.desktop'])\n"
+            + "    for c in cands:\n"
+            + "        for inst in installed:\n"
+            + "            if c.lower() == inst.lower(): return inst\n"
+            + "    return None\n"
+            + "target_lnf = find_partner(curr_lnf, target_dark)\n"
+            + "if not target_lnf:\n"
+            + "    fallbacks = ['org.kde.breezedark.desktop', 'org.fedoraproject.fedoradark.desktop'] if target_dark else ['org.kde.breeze.desktop', 'org.fedoraproject.fedoralight.desktop', 'org.fedoraproject.fedora.desktop']\n"
+            + "    for fb in fallbacks:\n"
+            + "        if fb in installed: target_lnf = fb; break\n"
+            + "if target_lnf:\n"
+            + "    subprocess.run(['plasma-apply-lookandfeel', '-a', target_lnf])\n"
+            + "if curr_scheme:\n"
+            + "    target_scheme = ''\n"
+            + "    if target_dark:\n"
+            + "        if curr_scheme.endswith('Light'): target_scheme = curr_scheme[:-5] + 'Dark'\n"
+            + "        elif 'Dark' not in curr_scheme: target_scheme = curr_scheme + 'Dark'\n"
+            + "    else:\n"
+            + "        if curr_scheme.endswith('Dark'): target_scheme = curr_scheme[:-4] + 'Light'\n"
+            + "        elif 'Dark' in curr_scheme: target_scheme = curr_scheme.replace('Dark', 'Light')\n"
+            + "    if target_scheme:\n"
+            + "        subprocess.run(['plasma-apply-colorscheme', target_scheme])\n"
+            + "subprocess.run(['qdbus6', 'org.kde.KWin', '/KWin', 'reconfigure'])\n"
+
+        const proc = processFactory.createObject(service, {
+            command: ["python3", "-c", pyScript]
+        })
+        proc.exited.connect(function() {
+            service.themeChangeInProgress = false
             proc.destroy()
         })
         proc.running = true

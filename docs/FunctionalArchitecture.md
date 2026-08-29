@@ -128,6 +128,7 @@ graph TD
     - **第一优先级**：KDE Plasma 6 `org.kde.Solid.PowerManagement.Actions.BrightnessControl` 与 `org.kde.ScreenBrightness`（原生支持通过 DDC/CI 控制 DisplayPort/HDMI 外接显示器与内建屏）。
     - **第二优先级**：降级扫描 `/sys/class/backlight/*` 并通过 logind `SetBrightness` 进行硬件背光写入。
   - **通知历史中心**：归档会话内已处理通知，支持按应用分组、单条删除与一键清空。
+  - **已知待解决项（Known Pending Issue）**：在部分 Wayland/Multi-Seat（多席位）或非标准 DisplayManager 配置下，会话切换（Switch User）由于席位通信权限与 VT 切换隔离受限，当前版本暂未完全覆盖全部多席位环境，待后续引入更底层的 session gateway 专有适配。
 
 ---
 

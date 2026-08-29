@@ -68,7 +68,7 @@ PanelWindow {
     screen: root.targetScreen
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.layer: WlrLayer.Overlay
 
     anchors {
         top: true
