@@ -26,7 +26,7 @@ Item {
             text: Qt.formatDateTime(clock.date, "h:mm")
             color: ThemeService.foregroundColor
             style: Text.Outline
-            styleColor: Qt.rgba(0, 0, 0, 0.38)
+            styleColor: ThemeService.isDark ? Qt.rgba(0, 0, 0, 0.38) : Qt.rgba(1, 1, 1, 0.35)
             font {
                 family: "SF Pro Display"
                 pixelSize: 14
@@ -39,7 +39,7 @@ Item {
             text: Qt.formatDateTime(clock.date, "M月d日 dddd")
             color: ThemeService.foregroundColor
             style: Text.Outline
-            styleColor: Qt.rgba(0, 0, 0, 0.38)
+            styleColor: ThemeService.isDark ? Qt.rgba(0, 0, 0, 0.38) : Qt.rgba(1, 1, 1, 0.35)
             font {
                 family: "Noto Sans CJK SC"
                 pixelSize: 14
