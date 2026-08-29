@@ -52,6 +52,11 @@ ApplicationWindow {
             ? Qt.rgba(1, 1, 1, 0.075) : Qt.rgba(0, 0, 0, 0.055)
         readonly property color floatingShadow: dark
             ? Qt.rgba(0, 0, 0, 0.42) : Qt.rgba(0.17, 0.21, 0.30, 0.16)
+        readonly property color previewPane: dark ? "#14151a" : "#eef2f7"
+        readonly property color previewBar: dark ? "#2c2d35" : "#ffffff"
+        readonly property color previewTaskbar: dark ? "#1e2028" : "#ffffff"
+        readonly property color previewDock: dark ? "#323540" : "#ffffff"
+        readonly property color previewIcon: dark ? "#a0a4b0" : "#7c8290"
     }
     readonly property var contentByPage: [
         {
@@ -336,10 +341,6 @@ ApplicationWindow {
             return 0
         }
 
-        property int barVisibilityModeIndex: 0
-        property bool barIntegratedWithDock: false
-        readonly property var barVisibilityModes: ["always", "smart", "persistent"]
-
         function applyState(state) {
             if (!state || state.baseHeight === undefined)
                 return
@@ -353,13 +354,6 @@ ApplicationWindow {
             iconOpacityDirty = false
             layoutDirty = false
             errorText = ""
-        }
-
-        function applyAppearanceState(state) {
-            if (!state)
-                return
-            barVisibilityModeIndex = visibilityModeIndexFromString(state.barVisibilityMode)
-            barIntegratedWithDock = Boolean(state.barIntegratedWithDock)
         }
 
         function savePosition(index) {
@@ -397,23 +391,6 @@ ApplicationWindow {
                 errorText = bridge.lastError
         }
 
-        function saveBarVisibilityMode(index) {
-            if (!bridge)
-                return
-            const mode = barVisibilityModes[index]
-            applyAppearanceState(bridge.updateBarVisibilityMode(mode))
-            if (bridge.lastError)
-                errorText = bridge.lastError
-        }
-
-        function setBarIntegratedWithDock(enabled) {
-            if (!bridge)
-                return
-            applyAppearanceState(bridge.updateBarIntegratedWithDock(enabled))
-            if (bridge.lastError)
-                errorText = bridge.lastError
-        }
-
         function applyTintPreset(index) {
             saveTintColor(tintPresets[index].color)
         }
@@ -424,7 +401,6 @@ ApplicationWindow {
                 return
             }
             applyState(bridge.dockSnapshot())
-            applyAppearanceState(bridge.appearanceSnapshot())
             if (bridge.lastError)
                 errorText = bridge.lastError
         }
@@ -1807,6 +1783,12 @@ ApplicationWindow {
                         anchors.rightMargin: 16
                         spacing: 12
                         SettingIcon { symbol: "≈"; tint: "#af52de" }
+                        Text {
+                            text: "Bar 液态强度"
+                            color: theme.primaryText
+                            font.pixelSize: 14
+                        }
+                        Item { Layout.fillWidth: true }
                         Text {
                             text: barPage.percentage(barPage.barLiquidStrength)
                             color: theme.secondaryText

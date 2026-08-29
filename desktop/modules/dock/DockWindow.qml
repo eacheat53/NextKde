@@ -105,7 +105,10 @@ PanelWindow {
             : dockContainer.height + root.edgeMargin + root.workspaceGap)
         : 0
 
-    BackgroundEffect.blurRegion: Region {
+    BackgroundEffect.blurRegion: (AppearanceConfigService.effectiveDockBlur > 0.005) ? dockBlurRegionHolder : null
+
+    Region {
+        id: dockBlurRegionHolder
         RoundedBlurRegion {
             id: glassRegion
             item: dockWrapper

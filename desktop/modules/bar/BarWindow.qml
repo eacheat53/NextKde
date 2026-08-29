@@ -50,7 +50,10 @@ PanelWindow {
         right: 15
     }
 
-    BackgroundEffect.blurRegion: Region {
+    BackgroundEffect.blurRegion: (AppearanceConfigService.effectiveBarBlur > 0.005) ? barBlurRegionHolder : null
+
+    Region {
+        id: barBlurRegionHolder
         RoundedBlurRegion {
             id: barBlurRegion
             item: barWrapper
