@@ -15,8 +15,35 @@ QtObject {
     // Defaults preserve the material that existed before these controls:
     // LiquidGlassControl used a 10px blur (10 / 24 ~= 0.42), while large
     // surfaces rendered their liquid layers at full strength.
-    property real blurStrength: 0.42
-    property real liquidStrength: 1.0
+    property real dockBlurStrength: 0.42
+    property real dockLiquidStrength: 1.0
+
+    // Bar blur settings: either inherits dock baseline or uses independent values.
+    property bool barBlurInheritDock: true
+    property real barBlurStrength: 0.42
+    property real barLiquidStrength: 1.0
+
+    // Launcher blur settings: either inherits dock baseline or uses independent values.
+    property bool launcherBlurInheritDock: true
+    property real launcherBlurStrength: 0.42
+    property real launcherLiquidStrength: 1.0
+
+    // Backward compatibility aliases for Dock/global baseline:
+    property real blurStrength: dockBlurStrength
+    property real liquidStrength: dockLiquidStrength
+
+    // Effective reactive properties for consumers:
+    readonly property real effectiveDockBlur: dockBlurStrength
+    readonly property real effectiveDockLiquid: dockLiquidStrength
+    readonly property real effectiveBarBlur: barBlurInheritDock
+        ? dockBlurStrength : barBlurStrength
+    readonly property real effectiveBarLiquid: barBlurInheritDock
+        ? dockLiquidStrength : barLiquidStrength
+    readonly property real effectiveLauncherBlur: launcherBlurInheritDock
+        ? dockBlurStrength : launcherBlurStrength
+    readonly property real effectiveLauncherLiquid: launcherBlurInheritDock
+        ? dockLiquidStrength : launcherLiquidStrength
+
     // "macos" matches the shell geometry that predates selectable styles,
     // so upgrading an existing installation does not unexpectedly reshape it.
     property string shellStyle: "macos"
@@ -40,23 +67,103 @@ QtObject {
             ? Math.max(0.0, Math.min(1.0, number)) : NaN
     }
 
-    function updateBlurStrength(rawValue) {
+    function _toBool(value) {
+        return value === true || value === 1
+            || String(value).toLowerCase() === "true"
+    }
+
+    function updateDockBlurStrength(rawValue) {
         const value = _normalized(rawValue)
         if (!Number.isFinite(value)
-                || Math.abs(blurStrength - value) <= 0.001)
+                || Math.abs(dockBlurStrength - value) <= 0.001)
             return false
+        dockBlurStrength = value
         blurStrength = value
         saveTimer.restart()
         effectSyncTimer.restart()
         return true
     }
 
-    function updateLiquidStrength(rawValue) {
+    function updateDockLiquidStrength(rawValue) {
         const value = _normalized(rawValue)
         if (!Number.isFinite(value)
-                || Math.abs(liquidStrength - value) <= 0.001)
+                || Math.abs(dockLiquidStrength - value) <= 0.001)
             return false
+        dockLiquidStrength = value
         liquidStrength = value
+        saveTimer.restart()
+        effectSyncTimer.restart()
+        return true
+    }
+
+    // Backward compatibility aliases
+    function updateBlurStrength(rawValue) {
+        return updateDockBlurStrength(rawValue)
+    }
+
+    function updateLiquidStrength(rawValue) {
+        return updateDockLiquidStrength(rawValue)
+    }
+
+    function updateBarBlurInherit(rawValue) {
+        const value = _toBool(rawValue)
+        if (barBlurInheritDock === value)
+            return false
+        barBlurInheritDock = value
+        saveTimer.restart()
+        effectSyncTimer.restart()
+        return true
+    }
+
+    function updateBarBlurStrength(rawValue) {
+        const value = _normalized(rawValue)
+        if (!Number.isFinite(value)
+                || Math.abs(barBlurStrength - value) <= 0.001)
+            return false
+        barBlurStrength = value
+        saveTimer.restart()
+        effectSyncTimer.restart()
+        return true
+    }
+
+    function updateBarLiquidStrength(rawValue) {
+        const value = _normalized(rawValue)
+        if (!Number.isFinite(value)
+                || Math.abs(barLiquidStrength - value) <= 0.001)
+            return false
+        barLiquidStrength = value
+        saveTimer.restart()
+        effectSyncTimer.restart()
+        return true
+    }
+
+    function updateLauncherBlurInherit(rawValue) {
+        const value = _toBool(rawValue)
+        if (launcherBlurInheritDock === value)
+            return false
+        launcherBlurInheritDock = value
+        saveTimer.restart()
+        effectSyncTimer.restart()
+        return true
+    }
+
+    function updateLauncherBlurStrength(rawValue) {
+        const value = _normalized(rawValue)
+        if (!Number.isFinite(value)
+                || Math.abs(launcherBlurStrength - value) <= 0.001)
+            return false
+        launcherBlurStrength = value
+        saveTimer.restart()
+        effectSyncTimer.restart()
+        return true
+    }
+
+    function updateLauncherLiquidStrength(rawValue) {
+        const value = _normalized(rawValue)
+        if (!Number.isFinite(value)
+                || Math.abs(launcherLiquidStrength - value) <= 0.001)
+            return false
+        launcherLiquidStrength = value
         saveTimer.restart()
         effectSyncTimer.restart()
         return true
@@ -72,8 +179,7 @@ QtObject {
     }
 
     function updateBarIntegratedWithDock(rawValue) {
-        const value = rawValue === true || rawValue === 1
-            || String(rawValue).toLowerCase() === "true"
+        const value = _toBool(rawValue)
         if (barIntegratedWithDock === value)
             return false
         barIntegratedWithDock = value
@@ -91,15 +197,35 @@ QtObject {
     }
 
     function resetStrengths() {
-        const blurChanged = Math.abs(blurStrength - 0.42) > 0.001
-        const liquidChanged = Math.abs(liquidStrength - 1.0) > 0.001
+        const dockBlurChanged = Math.abs(dockBlurStrength - 0.42) > 0.001
+        const dockLiquidChanged = Math.abs(dockLiquidStrength - 1.0) > 0.001
+        const barInheritChanged = !barBlurInheritDock
+        const barBlurChanged = Math.abs(barBlurStrength - 0.42) > 0.001
+        const barLiquidChanged = Math.abs(barLiquidStrength - 1.0) > 0.001
+        const launcherInheritChanged = !launcherBlurInheritDock
+        const launcherBlurChanged = Math.abs(launcherBlurStrength - 0.42) > 0.001
+        const launcherLiquidChanged = Math.abs(launcherLiquidStrength - 1.0) > 0.001
+
+        dockBlurStrength = 0.42
+        dockLiquidStrength = 1.0
         blurStrength = 0.42
         liquidStrength = 1.0
-        if (blurChanged || liquidChanged) {
+        barBlurInheritDock = true
+        barBlurStrength = 0.42
+        barLiquidStrength = 1.0
+        launcherBlurInheritDock = true
+        launcherBlurStrength = 0.42
+        launcherLiquidStrength = 1.0
+
+        const changed = dockBlurChanged || dockLiquidChanged || barInheritChanged
+            || barBlurChanged || barLiquidChanged || launcherInheritChanged
+            || launcherBlurChanged || launcherLiquidChanged
+
+        if (changed) {
             saveTimer.restart()
             effectSyncTimer.restart()
         }
-        return blurChanged || liquidChanged
+        return changed
     }
 
     property Timer saveTimer: Timer {
@@ -137,9 +263,18 @@ QtObject {
 
     function _save() {
         const payload = JSON.stringify({
-            version: 4,
-            blurStrength: service.blurStrength,
-            liquidStrength: service.liquidStrength,
+            version: 5,
+            dockBlurStrength: service.dockBlurStrength,
+            dockLiquidStrength: service.dockLiquidStrength,
+            barBlurInheritDock: service.barBlurInheritDock,
+            barBlurStrength: service.barBlurStrength,
+            barLiquidStrength: service.barLiquidStrength,
+            launcherBlurInheritDock: service.launcherBlurInheritDock,
+            launcherBlurStrength: service.launcherBlurStrength,
+            launcherLiquidStrength: service.launcherLiquidStrength,
+            // Backwards compatibility fields for external tools
+            blurStrength: service.dockBlurStrength,
+            liquidStrength: service.dockLiquidStrength,
             shellStyle: service.shellStyle,
             barIntegratedWithDock: service.barIntegratedWithDock,
             barVisibilityMode: service.barVisibilityMode,
@@ -163,8 +298,8 @@ QtObject {
     }
 
     function _syncGlassEffect() {
-        const blurLevel = Math.round(1 + service.blurStrength * 14)
-        const refractionLevel = Math.round(service.liquidStrength * 20)
+        const blurLevel = Math.round(1 + service.dockBlurStrength * 14)
+        const refractionLevel = Math.round(service.dockLiquidStrength * 20)
         const process = _makeProcess([
             "sh", "-c",
             "kwriteconfig6 --file kwinrc --group Effect-blurplus --key BlurStrength \"$1\" && "
@@ -209,30 +344,51 @@ QtObject {
             if (code === 0 && process.stdout?.text) {
                 try {
                     const object = JSON.parse(process.stdout.text)
-                    const blur = service._normalized(object.blurStrength)
-                    const liquid = service._normalized(object.liquidStrength)
+                    const dockBlur = service._normalized(object.dockBlurStrength ?? object.blurStrength)
+                    const dockLiquid = service._normalized(object.dockLiquidStrength ?? object.liquidStrength)
+                    const hasBarInherit = typeof object.barBlurInheritDock === "boolean"
+                    const barBlur = service._normalized(object.barBlurStrength)
+                    const barLiquid = service._normalized(object.barLiquidStrength)
+                    const hasLauncherInherit = typeof object.launcherBlurInheritDock === "boolean"
+                    const launcherBlur = service._normalized(object.launcherBlurStrength)
+                    const launcherLiquid = service._normalized(object.launcherLiquidStrength)
                     const style = String(object.shellStyle ?? "")
-                    const hasBarIntegration = typeof object.barIntegratedWithDock
-                        === "boolean"
+                    const hasBarIntegration = typeof object.barIntegratedWithDock === "boolean"
                     const barVisibility = String(object.barVisibilityMode ?? "")
-                    if (Number.isFinite(blur))
-                        service.blurStrength = blur
-                    if (Number.isFinite(liquid))
-                        service.liquidStrength = liquid
+
+                    if (Number.isFinite(dockBlur)) {
+                        service.dockBlurStrength = dockBlur
+                        service.blurStrength = dockBlur
+                    }
+                    if (Number.isFinite(dockLiquid)) {
+                        service.dockLiquidStrength = dockLiquid
+                        service.liquidStrength = dockLiquid
+                    }
+                    if (hasBarInherit)
+                        service.barBlurInheritDock = object.barBlurInheritDock
+                    if (Number.isFinite(barBlur))
+                        service.barBlurStrength = barBlur
+                    if (Number.isFinite(barLiquid))
+                        service.barLiquidStrength = barLiquid
+                    if (hasLauncherInherit)
+                        service.launcherBlurInheritDock = object.launcherBlurInheritDock
+                    if (Number.isFinite(launcherBlur))
+                        service.launcherBlurStrength = launcherBlur
+                    if (Number.isFinite(launcherLiquid))
+                        service.launcherLiquidStrength = launcherLiquid
                     if (service.isValidShellStyle(style))
                         service.shellStyle = style
                     if (hasBarIntegration)
                         service.barIntegratedWithDock = object.barIntegratedWithDock
                     if (service.isValidBarVisibilityMode(barVisibility))
                         service.barVisibilityMode = barVisibility
-                    // Schema 1 had no shellStyle; schema 2 had no Bar
-                    // integration flag; schema 3 had no barVisibilityMode.
-                    // Preserve compatible defaults and persist once so later
-                    // readers always see schema 4.
-                    if (Number(object.version) !== 4
+
+                    if (Number(object.version) !== 5
                             || !service.isValidShellStyle(style)
                             || !hasBarIntegration
-                            || !service.isValidBarVisibilityMode(barVisibility))
+                            || !service.isValidBarVisibilityMode(barVisibility)
+                            || !hasBarInherit
+                            || !hasLauncherInherit)
                         service.saveTimer.restart()
                 } catch (error) {
                     console.warn("[AppearanceConfig] parse error: " + error)
