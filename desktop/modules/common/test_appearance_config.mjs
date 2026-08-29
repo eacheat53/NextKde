@@ -38,7 +38,8 @@ function migrateFromV4(v4) {
         launcherLiquidStrength: v4.launcherLiquidStrength ?? 1.0,
         shellStyle: v4.shellStyle ?? "macos",
         barIntegratedWithDock: v4.barIntegratedWithDock ?? false,
-        barVisibilityMode: v4.barVisibilityMode ?? "always"
+        barVisibilityMode: v4.barVisibilityMode ?? "always",
+        barLayoutMode: v4.barLayoutMode ?? "full"
     };
 }
 
@@ -106,6 +107,7 @@ function migrateFromV4(v4) {
     assert.equal(v5.shellStyle, "material");
     assert.equal(v5.barIntegratedWithDock, true);
     assert.equal(v5.barVisibilityMode, "smart");
+    assert.equal(v5.barLayoutMode, "full");
     console.log("ok: v4 to v5 migration test passed");
 }
 

@@ -49,6 +49,7 @@ QtObject {
     property string shellStyle: "macos"
     property bool barIntegratedWithDock: false
     property string barVisibilityMode: "always" // "always" | "smart" | "persistent"
+    property string barLayoutMode: "full" // "full" | "floating"
     property bool ready: false
 
     function isValidShellStyle(value) {
@@ -59,6 +60,10 @@ QtObject {
     function isValidBarVisibilityMode(value) {
         return value === "always" || value === "smart"
             || value === "persistent"
+    }
+
+    function isValidBarLayoutMode(value) {
+        return value === "full" || value === "floating"
     }
 
     function _normalized(value) {
@@ -196,6 +201,15 @@ QtObject {
         return true
     }
 
+    function updateBarLayoutMode(rawMode) {
+        const mode = String(rawMode)
+        if (!isValidBarLayoutMode(mode) || barLayoutMode === mode)
+            return false
+        barLayoutMode = mode
+        saveTimer.restart()
+        return true
+    }
+
     function resetStrengths() {
         const dockBlurChanged = Math.abs(dockBlurStrength - 0.42) > 0.001
         const dockLiquidChanged = Math.abs(dockLiquidStrength - 1.0) > 0.001
@@ -278,6 +292,7 @@ QtObject {
             shellStyle: service.shellStyle,
             barIntegratedWithDock: service.barIntegratedWithDock,
             barVisibilityMode: service.barVisibilityMode,
+            barLayoutMode: service.barLayoutMode,
         }, null, 2)
         const process = _makeProcess([
             "sh", "-c",
@@ -357,6 +372,7 @@ QtObject {
                     const style = String(object.shellStyle ?? "")
                     const hasBarIntegration = typeof object.barIntegratedWithDock === "boolean"
                     const barVisibility = String(object.barVisibilityMode ?? "")
+                    const barLayout = String(object.barLayoutMode ?? "")
 
                     if (Number.isFinite(dockBlur)) {
                         service.dockBlurStrength = dockBlur
@@ -384,11 +400,14 @@ QtObject {
                         service.barIntegratedWithDock = object.barIntegratedWithDock
                     if (service.isValidBarVisibilityMode(barVisibility))
                         service.barVisibilityMode = barVisibility
+                    if (service.isValidBarLayoutMode(barLayout))
+                        service.barLayoutMode = barLayout
 
                     if (Number(object.version) !== 5
                             || !service.isValidShellStyle(style)
                             || !hasBarIntegration
                             || !service.isValidBarVisibilityMode(barVisibility)
+                            || !service.isValidBarLayoutMode(barLayout)
                             || !hasBarInherit
                             || !hasLauncherInherit)
                         service.saveTimer.restart()

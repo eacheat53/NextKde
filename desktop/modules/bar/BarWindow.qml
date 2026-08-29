@@ -45,9 +45,11 @@ PanelWindow {
         right: true
     }
     margins {
-        top: 0
-        left: 15
-        right: 15
+        top: (AppearanceConfigService.barLayoutMode === "floating")
+            ? (AppearanceConfigService.barVisibilityMode !== "always" ? 8 : 6)
+            : 0
+        left: (AppearanceConfigService.barLayoutMode === "floating") ? 15 : 0
+        right: (AppearanceConfigService.barLayoutMode === "floating") ? 15 : 0
     }
 
     BackgroundEffect.blurRegion: (AppearanceConfigService.effectiveBarBlur > 0.005) ? barBlurRegionHolder : null
@@ -57,7 +59,7 @@ PanelWindow {
         RoundedBlurRegion {
             id: barBlurRegion
             item: barWrapper
-            radius: 12
+            radius: (AppearanceConfigService.barLayoutMode === "floating") ? 12 : 0
         }
     }
 
@@ -74,8 +76,8 @@ PanelWindow {
         LiquidGlassSurface {
             id: barGlassBackground
             anchors.fill: parent
-            radius: 12
-            visible: AppearanceConfigService.barVisibilityMode !== "always"
+            radius: (AppearanceConfigService.barLayoutMode === "floating") ? 12 : 0
+            visible: true
             baseColor: ThemeService.backgroundColor
             surfaceOpacity: 1.0
             blurStrength: AppearanceConfigService.effectiveBarBlur
@@ -94,8 +96,8 @@ PanelWindow {
         Loader {
             id: barContentLoader
             anchors.fill: parent
-            anchors.leftMargin: (AppearanceConfigService.barVisibilityMode !== "always") ? 10 : 0
-            anchors.rightMargin: (AppearanceConfigService.barVisibilityMode !== "always") ? 10 : 0
+            anchors.leftMargin: (AppearanceConfigService.barLayoutMode === "floating") ? 10 : 16
+            anchors.rightMargin: (AppearanceConfigService.barLayoutMode === "floating") ? 10 : 16
             active: root.barEnabled
             sourceComponent: Component {
                 Item {

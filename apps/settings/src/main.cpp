@@ -124,6 +124,11 @@ public:
             QStringLiteral("updateBarVisibilityMode"), mode}));
     }
 
+    Q_INVOKABLE QVariantMap updateBarLayoutMode(const QString &mode) {
+        return appearanceSnapshotFromReply(callAppearance({
+            QStringLiteral("updateBarLayoutMode"), mode}));
+    }
+
     Q_INVOKABLE QVariantMap resetAppearanceStrengths() {
         return appearanceSnapshotFromReply(callAppearance({QStringLiteral("resetStrengths")}));
     }
@@ -292,6 +297,8 @@ private:
                 object.value(QStringLiteral("barIntegratedWithDock")).toBool()},
             {QStringLiteral("barVisibilityMode"),
                 barVisibility.isEmpty() ? QStringLiteral("always") : barVisibility},
+            {QStringLiteral("barLayoutMode"),
+                object.value(QStringLiteral("barLayoutMode")).toString(QStringLiteral("full"))},
             {QStringLiteral("tokenVersion"), object.value(QStringLiteral("tokenVersion")).toInt()},
         };
     }

@@ -131,6 +131,7 @@ Item {
                 barIntegratedWithDock:
                     AppearanceConfigService.barIntegratedWithDock,
                 barVisibilityMode: AppearanceConfigService.barVisibilityMode,
+                barLayoutMode: AppearanceConfigService.barLayoutMode,
                 tokenVersion: AppearanceTokens.version,
             })
         }
@@ -197,6 +198,11 @@ Item {
 
         function updateBarVisibilityMode(mode: string): string {
             AppearanceConfigService.updateBarVisibilityMode(mode)
+            return snapshot()
+        }
+
+        function updateBarLayoutMode(mode: string): string {
+            AppearanceConfigService.updateBarLayoutMode(mode)
             return snapshot()
         }
 

@@ -1445,6 +1445,8 @@ ApplicationWindow {
         property bool barIntegratedWithDock: false
         property int barVisibilityModeIndex: 0
         readonly property var barVisibilityModes: ["always", "smart", "persistent"]
+        property int barLayoutModeIndex: 0
+        readonly property var barLayoutModes: ["full", "floating"]
         property bool barBlurInheritDock: true
         property real barBlurStrength: 0.42
         property real barLiquidStrength: 1.0
@@ -1461,10 +1463,16 @@ ApplicationWindow {
             return idx >= 0 ? idx : 0
         }
 
+        function barLayoutModeIndexFromString(mode) {
+            const idx = barLayoutModes.indexOf(mode)
+            return idx >= 0 ? idx : 0
+        }
+
         function applyState(state) {
             if (!state) return
             barIntegratedWithDock = Boolean(state.barIntegratedWithDock)
             barVisibilityModeIndex = barVisibilityModeIndexFromString(state.barVisibilityMode)
+            barLayoutModeIndex = barLayoutModeIndexFromString(state.barLayoutMode)
             barBlurInheritDock = state.barBlurInheritDock !== undefined ? Boolean(state.barBlurInheritDock) : true
             barBlurStrength = Number.isFinite(Number(state.barBlurStrength)) ? Number(state.barBlurStrength) : 0.42
             barLiquidStrength = Number.isFinite(Number(state.barLiquidStrength)) ? Number(state.barLiquidStrength) : 1.0
@@ -1498,6 +1506,15 @@ ApplicationWindow {
                 return
             const mode = barVisibilityModes[index]
             applyState(bridge.updateBarVisibilityMode(mode))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        function saveBarLayoutMode(index) {
+            if (!bridge)
+                return
+            const mode = barLayoutModes[index]
+            applyState(bridge.updateBarLayoutMode(mode))
             if (bridge.lastError)
                 errorText = bridge.lastError
         }
@@ -1581,12 +1598,53 @@ ApplicationWindow {
 
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 119
+            implicitHeight: barLayoutCol.implicitHeight
             radius: 18
             color: theme.card
 
             Column {
-                anchors.fill: parent
+                id: barLayoutCol
+                anchors.left: parent.left
+                anchors.right: parent.right
+
+                Item {
+                    width: parent.width
+                    height: 54
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        spacing: 12
+                        SettingIcon { symbol: "⎍"; tint: "#5ac8fa" }
+                        Text {
+                            text: "顶栏形态"
+                            color: theme.primaryText
+                            font.pixelSize: 15
+                            font.weight: Font.DemiBold
+                        }
+                        Item { Layout.fillWidth: true }
+                        SettingsNavBar {
+                            id: barLayoutNavBar
+                            model: [
+                                { id: "full", label: "全宽贴边" },
+                                { id: "floating", label: "悬浮胶囊" }
+                            ]
+                            itemWidthOverride: 76
+                            currentIndex: barPage.barLayoutModeIndex
+                            onSelectionChanged: function(index) {
+                                barPage.saveBarLayoutMode(index)
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 53
+                    height: 1
+                    color: theme.separator
+                }
 
                 Item {
                     width: parent.width
