@@ -183,6 +183,45 @@ public:
             QStringLiteral("updateFontWeight"), weight}));
     }
 
+    Q_INVOKABLE QVariantMap deskCenterSnapshot(const QString &screenName = {}) {
+        return deskCenterSnapshotFromReply(callDeskCenter({
+            QStringLiteral("snapshot"), screenName}));
+    }
+
+    Q_INVOKABLE QVariantMap updateDeskCenterWidget(
+            const QString &screenName, const QString &widgetId, bool enabled,
+            int columns, int rows, int column, int row, bool automatic) {
+        return deskCenterSnapshotFromReply(callDeskCenter({
+            QStringLiteral("updateWidget"), screenName, widgetId,
+            enabled ? QStringLiteral("true") : QStringLiteral("false"),
+            QString::number(columns), QString::number(rows),
+            QString::number(column), QString::number(row),
+            automatic ? QStringLiteral("true") : QStringLiteral("false")}));
+    }
+
+    Q_INVOKABLE QVariantMap moveDeskCenterWidget(
+            const QString &screenName, const QString &widgetId, int offset) {
+        return deskCenterSnapshotFromReply(callDeskCenter({
+            QStringLiteral("moveWidget"), screenName, widgetId,
+            QString::number(offset)}));
+    }
+
+    Q_INVOKABLE QVariantMap resetDeskCenterScreen(const QString &screenName) {
+        return deskCenterSnapshotFromReply(callDeskCenter({
+            QStringLiteral("resetScreen"), screenName}));
+    }
+
+    Q_INVOKABLE QVariantMap copyDeskCenterLayoutToAllScreens(
+            const QString &screenName) {
+        return deskCenterSnapshotFromReply(callDeskCenter({
+            QStringLiteral("copyLayoutToAllScreens"), screenName}));
+    }
+
+    Q_INVOKABLE QVariantMap resetAllDeskCenterLayouts() {
+        return deskCenterSnapshotFromReply(callDeskCenter({
+            QStringLiteral("resetAll")}));
+    }
+
     static QString readKdeConfig(const QString &file, const QString &group, const QString &key) {
         QProcess proc;
         proc.start(QStringLiteral("kreadconfig6"), {
@@ -535,6 +574,29 @@ private:
         };
     }
 
+    QVariantMap deskCenterSnapshotFromReply(const QString &payload) {
+        if (payload.isEmpty())
+            return {};
+
+        QJsonParseError parseError;
+        const QJsonDocument document = QJsonDocument::fromJson(
+            payload.toUtf8(), &parseError);
+        if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+            setLastError(QStringLiteral("桌面环境返回了无效的桌面小组件配置"));
+            return {};
+        }
+
+        const QJsonObject object = document.object();
+        if (!object.contains(QStringLiteral("screen"))
+                || !object.value(QStringLiteral("widgets")).isArray()) {
+            setLastError(QStringLiteral("桌面环境返回的桌面小组件配置不完整"));
+            return {};
+        }
+
+        setLastError({});
+        return object.toVariantMap();
+    }
+
     QString callDock(const QStringList &arguments) {
         return callShell(QStringLiteral("dock-settings"), arguments,
                          QStringLiteral("Dock 设置请求失败"));
@@ -548,6 +610,11 @@ private:
     QString callLauncher(const QStringList &arguments) {
         return callShell(QStringLiteral("applauncher-settings"), arguments,
                          QStringLiteral("启动台设置请求失败"));
+    }
+
+    QString callDeskCenter(const QStringList &arguments) {
+        return callShell(QStringLiteral("deskcenter-settings"), arguments,
+                         QStringLiteral("桌面小组件设置请求失败"));
     }
 
     QString callShell(const QString &target, const QStringList &arguments,

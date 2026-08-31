@@ -86,7 +86,7 @@ AppActionService ──-> launch / pin / unpin / hide / edit requests
 - **多席位/会话切换（Switch User）兼容性**：在特定多席位（Multi-Seat，如多 Seat 实例）或非标准 DisplayManager 环境下，由于席位通信权限与 VT 切换隔离，会话切换指令可能受限，待后续引入更底层的 session gateway 进行专有适配。
 - **多显示器每屏布局**：DeskCenter 小组件布局、桌面文件图标布局、Dock 位置/显示规则、壁纸与取色尚未按显示器持久化。
 - **可访问性与键盘导航**：焦点顺序、高对比度、减少动画与全键盘操作未完善。
-- **设置中心覆盖面**：`kos-settings` 已有显示/主题/Dock 页面；快捷键、DeskCenter 等模块设置仍待纳入。
+- **设置中心覆盖面**：`kos-settings` 已有显示/主题/顶栏/Dock/启动台/DeskCenter 页面；快捷键设置仍待纳入。
 
 ### 待优化
 

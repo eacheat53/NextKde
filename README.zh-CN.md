@@ -215,7 +215,7 @@ docs/           架构文档
   规则与壁纸取色按显示器持久化。
 - **DeskCenter 主题接入**——让桌面卡片消费外观 Token 层（最后一个未
   接入的 surface）。
-- **设置覆盖面**——`kos-settings` 增加快捷键与 DeskCenter 设置页。
+- **设置覆盖面**——`kos-settings` 的 DeskCenter 小组件设置页已支持开关、顺序、尺寸、位置和按显示器布局；快捷键设置仍待纳入。
 - **独立应用**——填充 `apps/` 下的 `calendar`、`todo`、`weather` 占位。
 - **可访问性与键盘导航**——焦点顺序、减少动画、高对比度与全键盘操作。
 - **天气图标集**——用完整 SVG 图标集替换目前 Unicode 字符、Canvas 绘制

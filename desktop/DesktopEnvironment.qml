@@ -274,6 +274,55 @@ Item {
         }
     }
 
+    IpcHandler {
+        target: "deskcenter-settings"
+
+        function resolvedScreenName(requested: string): string {
+            const value = String(requested ?? "").trim()
+            if (value)
+                return value
+            return DeskCenterConfigService.screenKey(
+                ScreenLifecycle.activeScreen?.name)
+        }
+
+        function snapshot(screenName: string): string {
+            return JSON.stringify(DeskCenterConfigService.snapshot(
+                resolvedScreenName(screenName)))
+        }
+
+        function updateWidget(screenName: string, widgetId: string,
+                enabled: bool, columns: int, rows: int, column: int,
+                row: int, automatic: bool): string {
+            DeskCenterConfigService.updateWidget(
+                resolvedScreenName(screenName), widgetId, enabled,
+                columns, rows, column, row, automatic)
+            return snapshot(screenName)
+        }
+
+        function moveWidget(screenName: string, widgetId: string,
+                offset: int): string {
+            DeskCenterConfigService.moveWidget(
+                resolvedScreenName(screenName), widgetId, offset)
+            return snapshot(screenName)
+        }
+
+        function resetScreen(screenName: string): string {
+            DeskCenterConfigService.resetScreen(resolvedScreenName(screenName))
+            return snapshot(screenName)
+        }
+
+        function copyLayoutToAllScreens(screenName: string): string {
+            DeskCenterConfigService.copyLayoutToAllScreens(
+                resolvedScreenName(screenName))
+            return snapshot(screenName)
+        }
+
+        function resetAll(): string {
+            DeskCenterConfigService.resetAll()
+            return snapshot("")
+        }
+    }
+
     // The KWin effect observes pointer presses at compositor scope and routes
     // them through WindowService's existing local bridge. Keep the policy here
     // so individual desktop, Dock, and tray surfaces need no outside-click

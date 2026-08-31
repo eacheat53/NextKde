@@ -12,18 +12,21 @@ QtObject {
     readonly property string settingsBinary:
         Quickshell.shellDir + "/apps/settings/build/kos-settings"
 
-    function openSettings() {
+    function openSettings(page) {
         Quickshell.execDetached([
             "sh", "-c",
-            "if [ -x \"$1\" ]; then exec \"$1\"; fi; "
-            + "if [ -x \"$2\" ]; then exec \"$2\"; fi; "
-            + "if command -v kos-settings >/dev/null 2>&1; then exec kos-settings; fi; "
-            + "if [ -x \"$HOME/.local/bin/kos-settings\" ]; then exec \"$HOME/.local/bin/kos-settings\"; fi; "
-            + "if command -v qml6 >/dev/null 2>&1; then exec qml6 \"$3\"; fi",
+            "primary=\"$1\"; secondary=\"$2\"; qml=\"$3\"; page=\"$4\"; set --; "
+            + "if [ -n \"$page\" ]; then set -- --page \"$page\"; fi; "
+            + "if [ -x \"$primary\" ]; then exec \"$primary\" \"$@\"; fi; "
+            + "if [ -x \"$secondary\" ]; then exec \"$secondary\" \"$@\"; fi; "
+            + "if command -v kos-settings >/dev/null 2>&1; then exec kos-settings \"$@\"; fi; "
+            + "if [ -x \"$HOME/.local/bin/kos-settings\" ]; then exec \"$HOME/.local/bin/kos-settings\" \"$@\"; fi; "
+            + "if command -v qml6 >/dev/null 2>&1; then exec qml6 \"$qml\" \"$@\"; fi",
             "kos-settings-launch",
             launcher.settingsBinary,
             Quickshell.shellDir + "/.build/apps/settings/kos-settings",
-            launcher.settingsEntrypoint
+            launcher.settingsEntrypoint,
+            String(page ?? "")
         ])
     }
 }
