@@ -244,6 +244,126 @@ def register_via_dbus(shortcuts):
                 time.sleep(1)
 
 
+def running_instance_exes():
+    """Realpaths of the quickshell binaries currently running this config.
+
+    The desktop files written here must launch a `qs` whose IPC protocol
+    matches the live instance: a mismatched CLI (e.g. the Fedora 0.2.1
+    package against a self-built 0.3.1 shell) makes every shortcut die
+    with "No running instances". The live process is the only reliable
+    source of truth — PATH order is not.
+    """
+    exes = set()
+    try:
+        pids = os.listdir("/proc")
+    except OSError:
+        return exes
+    for pid in pids:
+        if not pid.isdigit():
+            continue
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                args = [a.decode("utf-8", "replace")
+                        for a in f.read().split(b"\0") if a]
+            # Skip short-lived `qs ... ipc call` clients, keep the shell.
+            if "ipc" in args:
+                continue
+            if not any(a == CONFIG_DIR or a.startswith(CONFIG_DIR + os.sep)
+                       for a in args):
+                continue
+            exe = os.path.realpath(f"/proc/{pid}/exe")
+        except OSError:
+            continue
+        if os.path.basename(exe).lower() in ("quickshell", "qs"):
+            exes.add(exe)
+    return exes
+
+
+def autostart_exes():
+    """Realpaths of quickshell binaries referenced by session autostart.
+
+    Fallback source of truth when no instance is running yet: the session
+    will later start the shell from this entry, so the qs written into the
+    desktop files should match it.
+    """
+    base = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+    exes = set()
+    try:
+        names = os.listdir(os.path.join(base, "autostart"))
+    except OSError:
+        return exes
+    for name in names:
+        if not name.endswith(".desktop"):
+            continue
+        try:
+            with open(os.path.join(base, "autostart", name), encoding="utf-8") as f:
+                for line in f:
+                    if not line.startswith("Exec="):
+                        continue
+                    exe = line[len("Exec="):].strip().split(None, 1)[0]
+                    if os.path.basename(exe).lower() in ("quickshell", "qs"):
+                        exes.add(os.path.realpath(exe))
+                    break
+        except (OSError, IndexError):
+            continue
+    return exes
+
+
+def resolve_qs_bin():
+    """Pick the `qs` binary for Exec lines, immune to PATH pollution.
+
+    Preference: a qs candidate whose realpath equals the binary the
+    session actually runs (user-local path first, then PATH order, then
+    the binary's own directory); the running binary itself; the
+    user-local default; finally shutil.which. Divergent candidates are
+    reported so a shadowing package can never win silently again.
+    """
+    truth = running_instance_exes() or autostart_exes()
+    if not truth:
+        print("[global-shortcuts] 未发现运行中的 quickshell 实例，按固定优先级选择 qs")
+
+    candidates = []
+    seen = set()
+
+    def add(cand):
+        if cand and os.path.isfile(cand):
+            rp = os.path.realpath(cand)
+            if rp not in seen:
+                seen.add(rp)
+                candidates.append((cand, rp))
+
+    add(os.path.expanduser("~/.local/bin/qs"))
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        add(os.path.join(entry, "qs") if entry else None)
+    for exe in sorted(truth):
+        add(os.path.join(os.path.dirname(exe), "qs"))
+    add("/usr/local/bin/qs")
+
+    def warn_divergent():
+        for cand, rp in candidates:
+            if rp not in truth:
+                print(f"[global-shortcuts] 警告: 忽略与运行实例不一致的 qs: {cand} -> {rp}")
+
+    if truth:
+        for cand, rp in candidates:
+            if rp in truth:
+                warn_divergent()
+                return cand, f"与运行实例二进制一致: {rp}"
+        for exe in sorted(truth):
+            if os.path.isfile(exe) and os.access(exe, os.X_OK):
+                warn_divergent()
+                return exe, "运行实例二进制（未找到指向它的 qs 链接）"
+        print(f"[global-shortcuts] 警告: 运行实例二进制 {sorted(truth)} 不可用")
+
+    local = os.path.expanduser("~/.local/bin/qs")
+    if os.path.isfile(local):
+        return local, "默认用户路径"
+    found = shutil.which("qs")
+    if found:
+        return found, "PATH 解析"
+    raise SystemExit("[global-shortcuts] 错误: 找不到 qs 可执行文件，无法写入快捷键")
+
+
 def main():
     table = load_table()
     os.makedirs(APPS_DIR, exist_ok=True)
@@ -254,7 +374,8 @@ def main():
         clear_default_claims(entry["default"])
     bindings = existing_launch_bindings()
     registered_shortcuts = []
-    qs_bin = shutil.which("qs") or os.path.expanduser("~/.local/bin/qs")
+    qs_bin, qs_reason = resolve_qs_bin()
+    print(f"[global-shortcuts] qs 二进制: {qs_bin}（{qs_reason}）")
     for entry in table["shortcuts"]:
         shortcut_id = entry["id"]
         command = table["command"].format(qs=qs_bin,
@@ -290,6 +411,13 @@ def main():
 
     # Register bindings directly via DBus in the live compositor.
     register_via_dbus(registered_shortcuts)
+
+    # kglobalaccel may rewrite kglobalshortcutsrc while servicing the DBus
+    # registrations above, restoring default-column claims. Clear them again
+    # after registration so other components cannot steal these combos when
+    # they re-register.
+    for entry in registered_shortcuts:
+        clear_default_claims(entry["default"])
 
     print("[global-shortcuts] 完成；kglobalaccel 已重载")
 
