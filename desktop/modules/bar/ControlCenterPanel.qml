@@ -15,7 +15,7 @@ import qs.shared.qml.controls as LiquidControls
 // preserving the reference's two-column, pill-and-media-card hierarchy.
 //
 // PER-CARD INDEPENDENT GLASS: instead of one PopupWindow with a single blur
-// slab, each card is its own PanelWindow (ControlCenterCard) with its own
+// slab, each card is its own PopupWindow (ControlCenterCard) with its own
 // compositor blur region. KWin's blur is per-window, so each card blurs
 // exactly what is behind it (wallpaper AND open windows) and the gaps
 // between cards show the real desktop - the iOS "hollow" control center.
@@ -40,9 +40,9 @@ Item {
     readonly property bool isOpen: coordinator.open
 
     // The target screen (the bar's output). Cards live on the same screen.
-    readonly property var targetScreen: Quickshell.screens.length > 1
-        ? Quickshell.screens[1] : Quickshell.screens[0]
+    readonly property var targetScreen: ScreenLifecycle.activeScreen
     readonly property int controlCenterHeight: 597
+    readonly property int controlCenterWidth: 336
     readonly property real effectiveBlur: dockHosted
         ? AppearanceConfigService.effectiveDockBlur
         : AppearanceConfigService.effectiveBarBlur
@@ -63,19 +63,45 @@ Item {
 
     ControlCenterCoordinator {
         id: coordinator
-        // Aligned with the Wi-Fi panel: the panel's top edge sits at the bar
-        // bottom (35) and its right edge is flushed to the screen right edge
-        // after SlideX clamping. panelRight=0 puts the control center's right
-        // edge at screen right - 20 (the rightmost cards use offsetRight=20),
-        // and panelTop=35 matches the Wi-Fi panel's top.
-        panelTop: panel.dockHosted && panel.targetScreen
-            ? Math.max(12, panel.targetScreen.height
-                - ConfigService.baseHeight
-                - AppearanceTokens.dock.edgeMargin
-                - panel.controlCenterHeight - 8)
-            : 35
-        panelRight: 0
-        anchorLeft: panel.dockHosted && panel.dockEdge === "left"
+        cardAnchor: positioningAnchor
+        gridWidth: panel.controlCenterWidth
+        cardOffsetX: !panel.dockHosted ? 0
+            : panel.dockEdge === "left" ? -20
+            : panel.dockEdge === "right" ? 20 : 0
+        cardOffsetY: panel.dockHosted && panel.dockEdge === "bottom" ? 20 : 0
+    }
+
+    // Geometry oracle: it is anchored to the clicked control, which makes
+    // Quickshell select the correct output and clamp the group on every Dock
+    // edge. The visible cards use positioningAnchor as their common origin.
+    PopupWindow {
+        id: positioningPopup
+        visible: panel.anchorItem !== null
+        implicitWidth: panel.controlCenterWidth
+        implicitHeight: panel.controlCenterHeight
+        color: "transparent"
+        grabFocus: false
+        mask: Region { width: 0; height: 0 }
+
+        anchor {
+            item: panel.anchorItem
+            edges: !panel.dockHosted ? Edges.Bottom
+                : panel.dockEdge === "left" ? Edges.Right
+                : panel.dockEdge === "right" ? Edges.Left : Edges.Top
+            gravity: !panel.dockHosted ? Edges.Bottom
+                : panel.dockEdge === "left" ? Edges.Right
+                : panel.dockEdge === "right" ? Edges.Left : Edges.Top
+            adjustment: PopupAdjustment.Slide
+            margins.top: 0
+            margins.bottom: panel.dockHosted ? 0 : -8
+            margins.left: 0
+            margins.right: 0
+        }
+
+        Item {
+            id: positioningAnchor
+            anchors.fill: parent
+        }
     }
 
     property bool _internalTransition: false
@@ -126,7 +152,8 @@ Item {
     PanelWindow {
         id: dismissalBackdrop
         screen: panel.targetScreen
-        visible: coordinator.open || panel.sessionModalVisible
+        visible: ScreenLifecycle.outputAvailable && panel.targetScreen !== null
+            && (coordinator.open || panel.sessionModalVisible)
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.layer: WlrLayer.Top

@@ -1,4 +1,5 @@
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusMessage>
@@ -6,6 +7,8 @@
 #include <QDBusReply>
 #include <QMimeDatabase>
 #include <QProcess>
+#include <QRandomGenerator>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QUrl>
 #include <QVariantMap>
@@ -52,7 +55,27 @@ int main(int argc, char *argv[])
         return 0;
     const QString desktopFile = QStandardPaths::locate(
         QStandardPaths::ApplicationsLocation, applicationId);
-    return !desktopFile.isEmpty()
-        && QProcess::startDetached(QStringLiteral("gio"),
-                                   {QStringLiteral("launch"), desktopFile, filePath}) ? 0 : 1;
+    if (desktopFile.isEmpty())
+        return 1;
+    // The helper itself is spawned by, and inherits the cgroup of, the
+    // quickshell autostart unit.  A detached child keeps that cgroup, so the
+    // chosen application is started through its own transient systemd user
+    // scope — the same scheme KDE's and GNOME's launchers use — to keep it
+    // out of the shell's cgroup (and alive across a shell restart).
+    QString appId = applicationId;
+    if (appId.endsWith(QLatin1String(".desktop")))
+        appId.chop(8);
+    appId.remove(QRegularExpression(QStringLiteral("[^A-Za-z0-9.:_-]")));
+    const QString unitName = QStringLiteral("app-%1-%2.scope").arg(
+        appId.isEmpty() ? QStringLiteral("app") : appId,
+        QString::number(QDateTime::currentMSecsSinceEpoch(), 36)
+            + QString::number(QRandomGenerator::global()->generate() % 1000000, 36));
+    const QStringList gioArgs = {QStringLiteral("launch"), desktopFile, filePath};
+    QStringList runArgs = {QStringLiteral("--user"), QStringLiteral("--scope"),
+                           QStringLiteral("--quiet"), QStringLiteral("--collect"),
+                           QStringLiteral("--unit"), unitName,
+                           QStringLiteral("gio")};
+    runArgs.append(gioArgs);
+    return QProcess::startDetached(QStringLiteral("systemd-run"), runArgs)
+           || QProcess::startDetached(QStringLiteral("gio"), gioArgs) ? 0 : 1;
 }

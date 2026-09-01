@@ -8,6 +8,7 @@ import qs.desktop.modules.quicksearch
 import qs.desktop.modules.notifications
 import qs.desktop.modules.applauncher
 import qs.desktop.modules.deskcenter
+import qs.desktop.modules.overview
 import qs.desktop.modules.common
 
 Item {
@@ -108,18 +109,6 @@ Item {
             return JSON.stringify({
                 globalBlurStrength: AppearanceConfigService.globalBlurStrength,
                 globalLiquidStrength: AppearanceConfigService.globalLiquidStrength,
-                dockBlurInherit: AppearanceConfigService.dockBlurInherit,
-                dockBlurStrength: AppearanceConfigService.dockBlurStrength,
-                dockLiquidStrength: AppearanceConfigService.dockLiquidStrength,
-                barBlurInherit: AppearanceConfigService.barBlurInherit,
-                barBlurStrength: AppearanceConfigService.barBlurStrength,
-                barLiquidStrength: AppearanceConfigService.barLiquidStrength,
-                launcherBlurInherit:
-                    AppearanceConfigService.launcherBlurInherit,
-                launcherBlurStrength:
-                    AppearanceConfigService.launcherBlurStrength,
-                launcherLiquidStrength:
-                    AppearanceConfigService.launcherLiquidStrength,
                 effectiveDockBlur: AppearanceConfigService.effectiveDockBlur,
                 effectiveDockLiquid: AppearanceConfigService.effectiveDockLiquid,
                 effectiveBarBlur: AppearanceConfigService.effectiveBarBlur,
@@ -128,9 +117,6 @@ Item {
                     AppearanceConfigService.effectiveLauncherBlur,
                 effectiveLauncherLiquid:
                     AppearanceConfigService.effectiveLauncherLiquid,
-                // Backward compatibility aliases
-                barBlurInheritDock: AppearanceConfigService.barBlurInherit,
-                launcherBlurInheritDock: AppearanceConfigService.launcherBlurInherit,
                 blurStrength: AppearanceConfigService.globalBlurStrength,
                 liquidStrength: AppearanceConfigService.globalLiquidStrength,
                 shellStyle: AppearanceConfigService.shellStyle,
@@ -138,6 +124,8 @@ Item {
                     AppearanceConfigService.barIntegratedWithDock,
                 barVisibilityMode: AppearanceConfigService.barVisibilityMode,
                 barLayoutMode: AppearanceConfigService.barLayoutMode,
+                dockWindowAnimationStyle:
+                    AppearanceConfigService.dockWindowAnimationStyle,
                 tokenVersion: AppearanceTokens.version,
             })
         }
@@ -152,21 +140,6 @@ Item {
             return snapshot()
         }
 
-        function updateDockBlurInherit(enabled: bool): string {
-            AppearanceConfigService.updateDockBlurInherit(enabled)
-            return snapshot()
-        }
-
-        function updateDockBlurStrength(value: real): string {
-            AppearanceConfigService.updateDockBlurStrength(value)
-            return snapshot()
-        }
-
-        function updateDockLiquidStrength(value: real): string {
-            AppearanceConfigService.updateDockLiquidStrength(value)
-            return snapshot()
-        }
-
         function updateBlurStrength(value: real): string {
             AppearanceConfigService.updateGlobalBlurStrength(value)
             return snapshot()
@@ -174,36 +147,6 @@ Item {
 
         function updateLiquidStrength(value: real): string {
             AppearanceConfigService.updateGlobalLiquidStrength(value)
-            return snapshot()
-        }
-
-        function updateBarBlurInherit(enabled: bool): string {
-            AppearanceConfigService.updateBarBlurInherit(enabled)
-            return snapshot()
-        }
-
-        function updateBarBlurStrength(value: real): string {
-            AppearanceConfigService.updateBarBlurStrength(value)
-            return snapshot()
-        }
-
-        function updateBarLiquidStrength(value: real): string {
-            AppearanceConfigService.updateBarLiquidStrength(value)
-            return snapshot()
-        }
-
-        function updateLauncherBlurInherit(enabled: bool): string {
-            AppearanceConfigService.updateLauncherBlurInherit(enabled)
-            return snapshot()
-        }
-
-        function updateLauncherBlurStrength(value: real): string {
-            AppearanceConfigService.updateLauncherBlurStrength(value)
-            return snapshot()
-        }
-
-        function updateLauncherLiquidStrength(value: real): string {
-            AppearanceConfigService.updateLauncherLiquidStrength(value)
             return snapshot()
         }
 
@@ -224,6 +167,11 @@ Item {
 
         function updateBarLayoutMode(mode: string): string {
             AppearanceConfigService.updateBarLayoutMode(mode)
+            return snapshot()
+        }
+
+        function updateDockWindowAnimationStyle(style: string): string {
+            AppearanceConfigService.updateDockWindowAnimationStyle(style)
             return snapshot()
         }
 
@@ -273,6 +221,55 @@ Item {
         }
     }
 
+    IpcHandler {
+        target: "deskcenter-settings"
+
+        function resolvedScreenName(requested: string): string {
+            const value = String(requested ?? "").trim()
+            if (value)
+                return value
+            return DeskCenterConfigService.screenKey(
+                ScreenLifecycle.activeScreen?.name)
+        }
+
+        function snapshot(screenName: string): string {
+            return JSON.stringify(DeskCenterConfigService.snapshot(
+                resolvedScreenName(screenName)))
+        }
+
+        function updateWidget(screenName: string, widgetId: string,
+                enabled: bool, columns: int, rows: int, column: int,
+                row: int, automatic: bool): string {
+            DeskCenterConfigService.updateWidget(
+                resolvedScreenName(screenName), widgetId, enabled,
+                columns, rows, column, row, automatic)
+            return snapshot(screenName)
+        }
+
+        function moveWidget(screenName: string, widgetId: string,
+                offset: int): string {
+            DeskCenterConfigService.moveWidget(
+                resolvedScreenName(screenName), widgetId, offset)
+            return snapshot(screenName)
+        }
+
+        function resetScreen(screenName: string): string {
+            DeskCenterConfigService.resetScreen(resolvedScreenName(screenName))
+            return snapshot(screenName)
+        }
+
+        function copyLayoutToAllScreens(screenName: string): string {
+            DeskCenterConfigService.copyLayoutToAllScreens(
+                resolvedScreenName(screenName))
+            return snapshot(screenName)
+        }
+
+        function resetAll(): string {
+            DeskCenterConfigService.resetAll()
+            return snapshot("")
+        }
+    }
+
     // The KWin effect observes pointer presses at compositor scope and routes
     // them through WindowService's existing local bridge. Keep the policy here
     // so individual desktop, Dock, and tray surfaces need no outside-click
@@ -288,9 +285,22 @@ Item {
         id: quickSearch
     }
     AppLauncher {}
+    Overview {}
+    IpcHandler {
+        target: "desktop"
+        function toggle(): void { WindowService.toggleShowDesktop() }
+        function show(): void { WindowService.toggleShowDesktop() }
+    }
     NotificationCenter {}
     DeskCenter {}
-    Bar { enabled: !shell.barIntegratedWithDock }
+    // Do not briefly map the standalone Bar with the default setting and then
+    // hide it while its tray delegates are still being constructed. Qt 6.11
+    // can crash while cleaning that incomplete QQuickWindow scene. Wait for
+    // the persisted integration choice before making the Bar visible.
+    Bar {
+        enabled: AppearanceConfigService.ready
+            && !shell.barIntegratedWithDock
+    }
     Dock {
         clockInInfoCarousel: shell.barIntegratedWithDock
             && ConfigService.position === "bottom"

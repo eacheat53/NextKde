@@ -7,11 +7,13 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Widgets
 import Qt5Compat.GraphicalEffects
+import qs.desktop
 import qs.desktop.modules.applauncher
 import qs.desktop.modules.bar
 import qs.desktop.modules.common
 import qs.desktop.modules.dock
 import qs.desktop.modules.weather
+import "DeskCenterLayout.mjs" as DeskLayout
 
 // iPadOS-inspired desktop widgets. This is a Background layer: normal and
 // maximised application windows are always painted and interacted with above
@@ -42,11 +44,10 @@ PanelWindow {
     readonly property real layoutBaseSideMargin: 8
     readonly property real layoutBaseGap: 10
     // The standalone Bar needs its 35px strip plus breathing room. Once Bar
-    // content is hosted by the bottom Dock, reclaim that strip for widgets and
-    // desktop files instead of leaving a permanent empty band.
+    // content is hosted by Dock, reclaim that strip for widgets and desktop
+    // files regardless of which edge hosts the Dock.
     readonly property bool barIntegratedWithDock:
         AppearanceConfigService.barIntegratedWithDock
-        && ConfigService.position === "bottom"
     readonly property real topInset: barIntegratedWithDock
         ? 24 : Math.max(56, ConfigService.barHeight + 21)
     readonly property real bottomInset: Math.max(96, AppLauncherService.dockHeight + 24)
@@ -174,66 +175,21 @@ PanelWindow {
         process.running = true
     }
 
-    // Higher priority widgets win when a short display cannot accommodate all
-    // rows. The desktop never scrolls and cards never shrink their type.
-    readonly property var widgetDefinitions: [
-        { id: "clock", title: "", columns: 1, rows: 1, priority: 100,
-            startColor: "#21161e", endColor: "#170f14", surface: false },
-        { id: "weather", title: "", columns: 3, rows: 1, priority: 90,
-            startColor: "#404f86", endColor: "#30345e", surface: false },
-        { id: "calendar", title: "", columns: 2, rows: 1, priority: 80, row: 1, column: 2,
-            startColor: "#ffffff", endColor: "#f2f2f4", surface: false },
-        { id: "system", title: "", columns: 2, rows: 1, priority: 70, row: 1, column: 0,
-            startColor: "#f5f3f6", endColor: "#e9e6eb", surface: false },
-        { id: "activity", title: "", columns: 2, rows: 1, priority: 60, row: 2, column: 0,
-            startColor: "#29252f", endColor: "#17151c", surface: false },
-        { id: "music", title: "", columns: 2, rows: 1, priority: 50, row: 2, column: 2,
-            startColor: "#101010", endColor: "#101010", surface: false }
-    ]
+    readonly property string screenName:
+        DeskCenterConfigService.screenKey(screen?.name)
+    readonly property int widgetColumns: DeskCenterConfigService.widgetColumns
+    readonly property var widgetDefinitions:
+        DeskCenterConfigService.widgetsForScreen(screenName)
     readonly property var weatherTheme: WeatherTheme.theme(WeatherService.weatherCode, WeatherService.isDay)
-
-    function packWidgets(definitions, columnCount, rowCount) {
-        const sorted = definitions.slice().sort(function(a, b) {
-            return b.priority - a.priority
-        })
-        const occupied = []
-        const result = []
-        for (let row = 0; row < rowCount; row++)
-            occupied[row] = Array(columnCount).fill(false)
-
-        for (let i = 0; i < sorted.length; i++) {
-            const widget = sorted[i]
-            let placed = false
-            const firstRow = widget.row ?? 0
-            const lastRow = widget.row ?? (rowCount - widget.rows)
-            const firstColumn = widget.column ?? 0
-            const lastColumn = widget.column ?? (columnCount - widget.columns)
-            for (let row = firstRow; row <= lastRow && !placed; row++) {
-                for (let column = firstColumn; column <= lastColumn && !placed; column++) {
-                    let fits = true
-                    for (let y = row; y < row + widget.rows && fits; y++) {
-                        if (y < 0 || y >= rowCount) {
-                            fits = false
-                            break
-                        }
-                        for (let x = column; x < column + widget.columns; x++)
-                            if (occupied[y][x]) { fits = false; break }
-                    }
-                    if (!fits)
-                        continue
-                    for (let y = row; y < row + widget.rows; y++)
-                        for (let x = column; x < column + widget.columns; x++)
-                            occupied[y][x] = true
-                    result.push({ id: widget.id, column: column, row: row,
-                        columns: widget.columns, rows: widget.rows })
-                    placed = true
-                }
-            }
-        }
+    readonly property var placements: DeskLayout.packWidgets(
+        widgetDefinitions, widgetColumns, usableRows)
+    readonly property int occupiedWidgetColumns: {
+        let result = 0
+        for (let index = 0; index < placements.length; ++index)
+            result = Math.max(result,
+                placements[index].column + placements[index].columns)
         return result
     }
-
-    readonly property var placements: packWidgets(widgetDefinitions, columns, usableRows)
     function placementFor(widgetId) {
         for (let i = 0; i < placements.length; i++)
             if (placements[i].id === widgetId)
@@ -247,6 +203,75 @@ PanelWindow {
         precision: SystemClock.Seconds
     }
 
+    // The active desktop-file surface owns its rectangular field on the
+    // right. Handle only the surrounding wallpaper here so this background
+    // layer cannot steal file selection, drag, or context-menu events.
+    Item {
+        id: desktopBackgroundRegions
+        anchors.fill: parent
+        z: 0
+
+        function handlePress(area, mouse) {
+            if (mouse.button === Qt.RightButton) {
+                desktopFileGrid.setSelectedPaths([])
+                desktopFileGrid.contextEntry = null
+                const point = area.mapToItem(desktopFileGrid, mouse.x, mouse.y)
+                desktopFileGrid.showMenu(null, point)
+                mouse.accepted = true
+                return
+            }
+            desktopFileGrid.clearDesktopSelection()
+        }
+
+        MouseArea {
+            id: leftDesktopBackground
+            x: 0
+            y: 0
+            width: Math.max(0, desktopFileGrid.x)
+            height: root.height
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onPressed: function(mouse) {
+                desktopBackgroundRegions.handlePress(leftDesktopBackground, mouse)
+            }
+        }
+
+        MouseArea {
+            id: topDesktopBackground
+            x: desktopFileGrid.x
+            y: 0
+            width: Math.max(0, root.width - x)
+            height: Math.max(0, desktopFileGrid.y)
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onPressed: function(mouse) {
+                desktopBackgroundRegions.handlePress(topDesktopBackground, mouse)
+            }
+        }
+
+        MouseArea {
+            id: rightDesktopBackground
+            x: desktopFileGrid.x + desktopFileGrid.width
+            y: desktopFileGrid.y
+            width: Math.max(0, root.width - x)
+            height: Math.max(0, desktopFileGrid.height)
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onPressed: function(mouse) {
+                desktopBackgroundRegions.handlePress(rightDesktopBackground, mouse)
+            }
+        }
+
+        MouseArea {
+            id: bottomDesktopBackground
+            x: desktopFileGrid.x
+            y: desktopFileGrid.y + desktopFileGrid.height
+            width: Math.max(0, root.width - x)
+            height: Math.max(0, root.height - y)
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onPressed: function(mouse) {
+                desktopBackgroundRegions.handlePress(bottomDesktopBackground, mouse)
+            }
+        }
+    }
+
     Repeater {
         model: root.widgetDefinitions
 
@@ -255,7 +280,7 @@ PanelWindow {
             required property var modelData
             readonly property var placement: root.placementFor(modelData.id)
             visible: placement !== null
-            title: modelData.title
+            title: modelData.title ?? ""
             startColor: modelData.id === "weather" ? root.weatherTheme.primary : modelData.startColor
             endColor: modelData.id === "weather" ? root.weatherTheme.secondary : modelData.endColor
             showSurface: modelData.surface
@@ -264,6 +289,21 @@ PanelWindow {
             width: root.spanSize(placement?.columns ?? 1)
             height: root.spanSize(placement?.rows ?? 1)
             Behavior on height { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+
+            MouseArea {
+                id: widgetContextPointer
+                anchors.fill: parent
+                z: 1000
+                acceptedButtons: Qt.RightButton
+                onPressed: function(mouse) {
+                    desktopFileGrid.setSelectedPaths([])
+                    desktopFileGrid.showMenu(null,
+                        widgetContextPointer.mapToItem(
+                            desktopFileGrid, mouse.x, mouse.y),
+                        card.modelData.id)
+                    mouse.accepted = true
+                }
+            }
 
             // Instantiate only this card's content. `visible: false` keeps a
             // QML tree alive, so the old delegate built every widget for every
@@ -291,7 +331,9 @@ PanelWindow {
                         const ctx = getContext("2d")
                         const size = Math.min(width, height)
                         const center = size / 2
-                        const radius = size / 2 - 3
+                        const radius = Math.max(0, size / 2 - 3)
+                        if (radius <= 0)
+                            return
                         const date = clock.date
                         ctx.reset()
                         ctx.translate((width - size) / 2 + center, (height - size) / 2 + center)
@@ -380,7 +422,9 @@ PanelWindow {
                             onPaint: {
                                 const ctx = getContext("2d")
                                 const center = width / 2
-                                const radius = center - 7
+                                const radius = Math.max(0, center - 7)
+                                if (radius <= 0)
+                                    return
                                 const amount = root.timerDuration > 0
                                     ? Math.max(0, Math.min(1, root.timerSeconds / root.timerDuration)) : 1
                                 ctx.reset()
@@ -924,7 +968,9 @@ PanelWindow {
                         spacing: -2
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: activityRings.icons[activityRings.hoveredMetric]
+                            text: activityRings.hoveredMetric >= 0
+                                ? (activityRings.icons[activityRings.hoveredMetric] ?? "")
+                                : ""
                             color: "#7d7782"
                             font { family: "LXGW WenKai Mono Nerd Font"; pixelSize: Math.max(10, activityRings.width * 0.1) }
                         }
@@ -1290,7 +1336,8 @@ PanelWindow {
                 Timer {
                     interval: 250
                     repeat: true
-                    running: musicContent.visible && musicContent.player?.isPlaying
+                    running: musicContent.visible
+                        && !!musicContent.player?.isPlaying
                     onTriggered: {
                         if (musicContent.player)
                             musicContent.player.positionChanged()
@@ -1683,7 +1730,7 @@ PanelWindow {
     // columns from right to left and rows from top to bottom.
     Item {
         id: desktopFileGrid
-        x: root.leftInset + 4 * (root.cellSize + root.gap)
+        x: root.leftInset + root.occupiedWidgetColumns * (root.cellSize + root.gap)
         y: root.topInset
         width: root.width - x - root.rightInset
         height: root.height - y - root.bottomInset
@@ -1705,6 +1752,7 @@ PanelWindow {
         readonly property int rowCount: Math.max(1, Math.floor(height / itemHeight))
         property var selectedPaths: []
         property var contextEntry: null
+        property string contextWidgetId: ""
         property string renamingPath: ""
         property string pendingRenamePath: ""
         property string folderDropCandidatePath: ""
@@ -2256,7 +2304,9 @@ PanelWindow {
             return handler ? "使用 " + applicationName(handler) + " 打开" : "打开"
         }
 
-        function showMenu(entry, windowPoint) {
+        function showMenu(entry, windowPoint, widgetId) {
+            contextEntry = entry || null
+            contextWidgetId = String(widgetId ?? "")
             // Build and show immediately - never block the right click on the
             // async gio open-with query (a slow/failed query must not make a
             // right click appear to do nothing).
@@ -2290,12 +2340,15 @@ PanelWindow {
             freeSlotDesktop.selectedIds = []
             desktopContextMenu.hide()
             contextEntry = null
+            contextWidgetId = ""
         }
 
         function triggerContextAction(kind) {
             const entry = contextEntry
+            const widgetId = contextWidgetId
             desktopContextMenu.hide()
             contextEntry = null
+            contextWidgetId = ""
             if (kind === "folder")
                 createNewFolder()
             else if (kind === "file")
@@ -2328,6 +2381,11 @@ PanelWindow {
                 resetLayout()
             else if (kind === "refresh")
                 root.desktopFiles.reload()
+            else if (kind === "hideWidget")
+                DeskCenterConfigService.updateWidgetEnabled(
+                    root.screenName, widgetId, false)
+            else if (kind === "openWidgetSettings")
+                DesktopAppLauncher.openSettings("desktop")
         }
 
         // ── Liquid context-menu data + builder ──
@@ -2362,7 +2420,12 @@ PanelWindow {
             const curEmoji = custom?.emoji ?? ""
             const root = []
 
-            if (e) {
+            if (contextWidgetId) {
+                root.push(_ctxAct("关闭“"
+                    + DeskCenterConfigService.widgetLabel(contextWidgetId)
+                    + "”", "hideWidget", ""))
+                root.push(_ctxAct("桌面小组件设置", "openWidgetSettings", ""))
+            } else if (e) {
                 root.push(_ctxAct(defaultOpenText(), "openEntry", ""))
                 if (selectedEntries().length === 1)
                     root.push(_ctxAct("重命名", "rename", ""))
@@ -2418,6 +2481,7 @@ PanelWindow {
                     .map(([px, l]) => _ctxCheck(l, "setIconSize", px,
                         iconSize === px, ""))
                 root.push(_ctxSub("图标大小", sizeKids, ""))
+                root.push(_ctxAct("桌面小组件设置", "openWidgetSettings", ""))
                 root.push(_ctxAct("刷新", "refresh", ""))
             }
             return root
@@ -2457,6 +2521,8 @@ PanelWindow {
                 break
             case "setIconSize": setIconSize(v); break
             case "refresh": triggerContextAction("refresh"); break
+            case "hideWidget": triggerContextAction("hideWidget"); break
+            case "openWidgetSettings": triggerContextAction("openWidgetSettings"); break
             }
         }
 

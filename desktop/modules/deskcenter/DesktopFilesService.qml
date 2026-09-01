@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell.Io
+import qs.desktop.modules.common
 
 // QML only consumes the shell-data-service snapshot. Directory scanning and
 // ordering deliberately remain in the service so this view survives reloads
@@ -105,10 +106,14 @@ QtObject {
     function openEntry(entry) {
         if (!entry?.path)
             return
+        // Launchers and file handlers both run inside their own systemd
+        // scope (see AppActionService.scopedCommand) so the started
+        // application never lands in the shell's autostart cgroup.
         if (entry.kind === "launcher")
-            run(["gio", "launch", entry.path])
+            run(AppActionService.scopedCommand(["gio", "launch", entry.path],
+                String(entry.path).split("/").pop().replace(/\.desktop$/i, "")))
         else
-            run(["xdg-open", entry.path])
+            run(AppActionService.scopedCommand(["xdg-open", entry.path], "xdg-open"))
     }
 
     // gio deliberately reports an empty file as application/x-zerosize,
@@ -170,8 +175,9 @@ QtObject {
     function launchWith(entry, desktopId) {
         if (!entry?.path || !desktopId)
             return
-        const script = "id=$1; target=$2; for root in \"${XDG_DATA_HOME:-$HOME/.local/share}/applications\" /usr/local/share/applications /usr/share/applications; do if test -f \"$root/$id\"; then exec gio launch \"$root/$id\" \"$target\"; fi; done; exit 1"
-        run(["sh", "-c", script, "desktop-open-with", desktopId, entry.path])
+        const script = "id=$1; target=$2; unit=$3; for root in \"${XDG_DATA_HOME:-$HOME/.local/share}/applications\" /usr/local/share/applications /usr/share/applications; do if test -f \"$root/$id\"; then if command -v systemd-run >/dev/null 2>&1; then exec systemd-run --user --scope --quiet --collect --unit \"$unit\" gio launch \"$root/$id\" \"$target\"; fi; exec gio launch \"$root/$id\" \"$target\"; fi; done; exit 1"
+        run(["sh", "-c", script, "desktop-open-with", desktopId, entry.path,
+            AppActionService.scopedUnitName(String(desktopId).replace(/\.desktop$/i, ""))])
     }
 
     function setDefaultOpenWith(mime, desktopId) {
@@ -191,7 +197,7 @@ QtObject {
 
     function openDirectory() {
         if (directory)
-            run(["xdg-open", directory])
+            run(AppActionService.scopedCommand(["xdg-open", directory], "xdg-open"))
     }
 
     function createUntitledFolder(callback) {

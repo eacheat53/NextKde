@@ -18,6 +18,13 @@ ApplicationWindow {
     property int currentPage: 0
     property string searchText: ""
 
+    Component.onCompleted: {
+        const arguments = Qt.application.arguments
+        const pageArgument = arguments.indexOf("--page")
+        if (pageArgument >= 0 && arguments[pageArgument + 1] === "desktop")
+            currentPage = 5
+    }
+
     // Qt updates SystemPalette when the desktop colour scheme changes. We use
     // it only to select the system appearance, then apply the matching iPadOS
     // palette so both modes keep a coherent Settings visual language.
@@ -77,6 +84,10 @@ ApplicationWindow {
         },
         {
             subtitle: "启动台",
+            groups: []
+        },
+        {
+            subtitle: "桌面",
             groups: []
         }
     ]
@@ -150,6 +161,59 @@ ApplicationWindow {
             ? Qt.rgba(1, 1, 1, 0.10) : "#d1d1d6"
         labelFontPixelSize: 10
         labelFontWeight: Font.DemiBold
+    }
+
+    component SettingsIconButton: ToolButton {
+        required property string symbol
+        property string description: ""
+        implicitWidth: 30
+        implicitHeight: 30
+        hoverEnabled: true
+        contentItem: Text {
+            text: parent.symbol
+            color: parent.enabled ? theme.primaryText : theme.tertiaryText
+            font.pixelSize: 15
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+        }
+        background: Rectangle {
+            radius: 8
+            color: parent.down ? theme.divider
+                : (parent.hovered ? theme.sidebarHover : "transparent")
+        }
+        ToolTip.visible: hovered && description.length > 0
+        ToolTip.text: description
+        ToolTip.delay: 450
+    }
+
+    component CompactStepper: RowLayout {
+        id: stepper
+        property int value: 0
+        property int from: 0
+        property int to: 10
+        signal valueRequested(int value)
+        spacing: 2
+
+        SettingsIconButton {
+            symbol: "−"
+            description: "减小"
+            enabled: stepper.enabled && stepper.value > stepper.from
+            onClicked: stepper.valueRequested(stepper.value - 1)
+        }
+        Text {
+            Layout.preferredWidth: 24
+            text: stepper.value
+            color: stepper.enabled ? theme.primaryText : theme.tertiaryText
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            horizontalAlignment: Text.AlignHCenter
+        }
+        SettingsIconButton {
+            symbol: "+"
+            description: "增大"
+            enabled: stepper.enabled && stepper.value < stepper.to
+            onClicked: stepper.valueRequested(stepper.value + 1)
+        }
     }
 
     component SettingRow: Item {
@@ -930,11 +994,13 @@ ApplicationWindow {
             font.weight: Font.DemiBold
             Layout.leftMargin: 13
             Layout.topMargin: 14
+            visible: false
         }
 
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: dockBlurCol.implicitHeight
+            visible: false
             radius: 18
             color: theme.card
 
@@ -1349,6 +1415,7 @@ ApplicationWindow {
         property var bridge: (typeof settingsBridge !== "undefined")
             ? settingsBridge : null
         property string shellStyle: "macos"
+        property string dockWindowAnimationStyle: "scale"
         property string errorText: ""
         readonly property var styles: [
             {
@@ -1376,10 +1443,16 @@ ApplicationWindow {
                 || style === "material"
         }
 
+        function isValidDockWindowAnimationStyle(style) {
+            return style === "scale" || style === "genie"
+        }
+
         function applyState(state) {
             if (!state || !isValidStyle(state.shellStyle))
                 return
             shellStyle = state.shellStyle
+            if (isValidDockWindowAnimationStyle(state.dockWindowAnimationStyle))
+                dockWindowAnimationStyle = state.dockWindowAnimationStyle
             errorText = ""
         }
 
@@ -1403,6 +1476,15 @@ ApplicationWindow {
                 errorText = bridge.lastError
         }
 
+        function setDockWindowAnimationStyle(style) {
+            if (!bridge || !isValidDockWindowAnimationStyle(style)) {
+                errorText = bridge ? "未知的窗口动画" : "尚未构建 Settings 桥接程序"
+                return
+            }
+            applyState(bridge.updateDockWindowAnimationStyle(style))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
         Component.onCompleted: refresh()
 
         Text {
@@ -1559,6 +1641,77 @@ ApplicationWindow {
             Layout.leftMargin: 13
             Layout.rightMargin: 13
             text: "选择界面形态会立即切换桌面组件的圆角、间距与表面质感规范。"
+            color: theme.secondaryText
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+        }
+
+        Text {
+            text: "窗口动画"
+            color: theme.secondaryText
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            Layout.leftMargin: 13
+            Layout.topMargin: 4
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: 82
+            radius: 18
+            color: theme.card
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                spacing: 12
+                SettingIcon { symbol: "◒"; tint: "#af52de" }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    Text {
+                        text: "窗口显示/隐藏"
+                        color: theme.primaryText
+                        font.pixelSize: 14
+                        font.weight: Font.DemiBold
+                    }
+                    Text {
+                        text: themePage.dockWindowAnimationStyle === "genie"
+                            ? "水滴形变缩入图标；打开窗口仍使用常规展开"
+                            : "等比例缩放到图标；最小化与恢复均保持平直路径"
+                        color: theme.secondaryText
+                        font.pixelSize: 11
+                    }
+                }
+                SettingsNavBar {
+                    Layout.preferredWidth: 148
+                    Layout.preferredHeight: 30
+                    // LiquidNavBar delegates expect { id, label, icon }.
+                    // A string model leaves modelData.label undefined, so the
+                    // previous control had no visible text despite rendering
+                    // its track and thumb.
+                    size: "tiny"
+                    barHeight: 30
+                    itemWidthOverride: 74
+                    model: [
+                        { id: "scale", label: "缩放" },
+                        { id: "genie", label: "水滴" }
+                    ]
+                    currentIndex: themePage.dockWindowAnimationStyle === "genie" ? 1 : 0
+                    onSelectionChanged: function(index) {
+                        themePage.setDockWindowAnimationStyle(
+                            index === 1 ? "genie" : "scale")
+                    }
+                }
+            }
+        }
+
+        Text {
+            Layout.fillWidth: true
+            Layout.leftMargin: 13
+            Layout.rightMargin: 13
+            text: "窗口动画会立即同步到 KWin；顶栏与 Dock 的布局在各自设置页中管理。"
             color: theme.secondaryText
             font.pixelSize: 12
             wrapMode: Text.Wrap
@@ -1874,11 +2027,13 @@ ApplicationWindow {
             font.weight: Font.DemiBold
             Layout.leftMargin: 13
             Layout.topMargin: 4
+            visible: false
         }
 
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: barBlurCol.implicitHeight
+            visible: false
             radius: 18
             color: theme.card
 
@@ -2017,6 +2172,7 @@ ApplicationWindow {
             Layout.leftMargin: 13
             Layout.rightMargin: 13
             text: "Bar 保持通透液态外观，可在上方选择跟随 Dock 模糊基准或在此独立定制。"
+            visible: false
             color: theme.secondaryText
             font.pixelSize: 12
             wrapMode: Text.Wrap
@@ -2463,11 +2619,13 @@ ApplicationWindow {
             font.weight: Font.DemiBold
             Layout.leftMargin: 13
             Layout.topMargin: 14
+            visible: false
         }
 
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: launcherBlurCol.implicitHeight
+            visible: false
             radius: 18
             color: theme.card
 
@@ -2613,6 +2771,440 @@ ApplicationWindow {
         }
     }
 
+    component DeskCenterSettingsPage: ColumnLayout {
+        id: deskCenterPage
+
+        Layout.fillWidth: true
+        spacing: 7
+        property var bridge: (typeof settingsBridge !== "undefined")
+            ? settingsBridge : null
+        property string screenName: ""
+        property var screens: []
+        property var widgets: []
+        property int widgetColumns: 4
+        property string errorText: ""
+
+        function applySnapshot(snapshot) {
+            if (!snapshot || snapshot.screen === undefined
+                    || snapshot.widgets === undefined)
+                return
+            screenName = String(snapshot.screen)
+            screens = snapshot.screens || []
+            widgets = snapshot.widgets || []
+            widgetColumns = Math.max(1, Number(snapshot.widgetColumns) || 4)
+            errorText = ""
+        }
+
+        function refresh(requestedScreen) {
+            if (!bridge) {
+                errorText = "尚未构建 Settings 桥接程序"
+                return
+            }
+            applySnapshot(bridge.deskCenterSnapshot(requestedScreen || screenName))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        function screenIndex() {
+            for (let index = 0; index < screens.length; ++index) {
+                if (screens[index].name === screenName)
+                    return index
+            }
+            return screens.length > 0 ? 0 : -1
+        }
+
+        function updateWidget(widget, changes) {
+            if (!bridge || !widget)
+                return
+            const next = Object.assign({}, widget, changes || {})
+            applySnapshot(bridge.updateDeskCenterWidget(
+                screenName, next.id, Boolean(next.enabled),
+                Number(next.columns), Number(next.rows),
+                Number(next.column), Number(next.row),
+                Boolean(next.automatic)))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        function moveWidget(widgetId, offset) {
+            if (!bridge)
+                return
+            applySnapshot(bridge.moveDeskCenterWidget(screenName, widgetId, offset))
+            if (bridge.lastError)
+                errorText = bridge.lastError
+        }
+
+        function resetScreen() {
+            if (bridge)
+                applySnapshot(bridge.resetDeskCenterScreen(screenName))
+        }
+
+        function copyToAllScreens() {
+            if (bridge)
+                applySnapshot(bridge.copyDeskCenterLayoutToAllScreens(screenName))
+        }
+
+        function resetAll() {
+            if (bridge)
+                applySnapshot(bridge.resetAllDeskCenterLayouts())
+        }
+
+        Component.onCompleted: refresh("")
+
+        Text {
+            text: "显示器布局".toUpperCase()
+            color: theme.secondaryText
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            Layout.leftMargin: 13
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: 62
+            radius: 18
+            color: theme.card
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                spacing: 12
+
+                SettingIcon { symbol: "▣"; tint: "#0a84ff" }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    Text {
+                        text: "当前布局显示器"
+                        color: theme.primaryText
+                        font.pixelSize: 14
+                        font.weight: Font.DemiBold
+                    }
+                    Text {
+                        text: "每台显示器分别保存组件开关、顺序、大小和位置"
+                        color: theme.secondaryText
+                        font.pixelSize: 11
+                    }
+                }
+                ComboBox {
+                    id: deskScreenSelector
+                    Layout.preferredWidth: 230
+                    model: deskCenterPage.screens
+                    textRole: "label"
+                    valueRole: "name"
+                    currentIndex: deskCenterPage.screenIndex()
+                    onActivated: function(index) {
+                        if (index >= 0 && deskCenterPage.screens[index])
+                            deskCenterPage.refresh(deskCenterPage.screens[index].name)
+                    }
+                    contentItem: Text {
+                        leftPadding: 12
+                        rightPadding: 28
+                        text: deskScreenSelector.displayText
+                        color: theme.primaryText
+                        font.pixelSize: 12
+                        verticalAlignment: Text.AlignVCenter
+                        elide: Text.ElideRight
+                    }
+                    background: Rectangle {
+                        radius: 10
+                        color: theme.searchField
+                        border.width: deskScreenSelector.activeFocus ? 1 : 0
+                        border.color: "#0a84ff"
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: "桌面小组件".toUpperCase()
+            color: theme.secondaryText
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            Layout.leftMargin: 13
+            Layout.topMargin: 14
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: deskWidgetList.implicitHeight
+            radius: 18
+            color: theme.card
+
+            Column {
+                id: deskWidgetList
+                anchors.left: parent.left
+                anchors.right: parent.right
+
+                Repeater {
+                    model: deskCenterPage.widgets
+
+                    delegate: Item {
+                        id: widgetSettingRow
+                        required property var modelData
+                        required property int index
+                        width: deskWidgetList.width
+                        height: 150
+                        opacity: modelData.enabled ? 1 : 0.58
+
+                        Item {
+                            id: widgetHeader
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            height: 58
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 16
+                                anchors.rightMargin: 16
+                                spacing: 11
+
+                                SettingIcon {
+                                    symbol: widgetSettingRow.modelData.symbol
+                                    tint: widgetSettingRow.modelData.tint
+                                }
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 1
+                                    Text {
+                                        text: widgetSettingRow.modelData.label
+                                        color: theme.primaryText
+                                        font.pixelSize: 14
+                                        font.weight: Font.DemiBold
+                                    }
+                                    Text {
+                                        text: widgetSettingRow.modelData.description
+                                        color: theme.secondaryText
+                                        font.pixelSize: 11
+                                    }
+                                }
+                                SettingsIconButton {
+                                    symbol: "↑"
+                                    description: "向前移动"
+                                    enabled: widgetSettingRow.index > 0
+                                    onClicked: deskCenterPage.moveWidget(
+                                        widgetSettingRow.modelData.id, -1)
+                                }
+                                SettingsIconButton {
+                                    symbol: "↓"
+                                    description: "向后移动"
+                                    enabled: widgetSettingRow.index
+                                        < deskCenterPage.widgets.length - 1
+                                    onClicked: deskCenterPage.moveWidget(
+                                        widgetSettingRow.modelData.id, 1)
+                                }
+                                LiquidControls.LiquidGlassSwitch {
+                                    checked: Boolean(widgetSettingRow.modelData.enabled)
+                                    accentColor: widgetSettingRow.modelData.tint
+                                    trackColor: theme.divider
+                                    onToggled: function(checked) {
+                                        deskCenterPage.updateWidget(
+                                            widgetSettingRow.modelData,
+                                            { enabled: checked })
+                                    }
+                                }
+                            }
+                        }
+
+                        Item {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: widgetHeader.bottom
+                            height: 46
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 56
+                                anchors.rightMargin: 16
+                                spacing: 10
+                                enabled: widgetSettingRow.modelData.enabled
+
+                                Text {
+                                    text: "尺寸"
+                                    color: theme.secondaryText
+                                    font.pixelSize: 12
+                                    Layout.preferredWidth: 40
+                                }
+                                Text {
+                                    text: "宽"
+                                    color: theme.tertiaryText
+                                    font.pixelSize: 11
+                                }
+                                CompactStepper {
+                                    value: Number(widgetSettingRow.modelData.columns)
+                                    from: Number(widgetSettingRow.modelData.minColumns)
+                                    to: Math.min(deskCenterPage.widgetColumns,
+                                        Number(widgetSettingRow.modelData.maxColumns))
+                                    onValueRequested: function(value) {
+                                        deskCenterPage.updateWidget(
+                                            widgetSettingRow.modelData,
+                                            { columns: value })
+                                    }
+                                }
+                                Text {
+                                    text: "高"
+                                    color: theme.tertiaryText
+                                    font.pixelSize: 11
+                                }
+                                CompactStepper {
+                                    value: Number(widgetSettingRow.modelData.rows)
+                                    from: Number(widgetSettingRow.modelData.minRows)
+                                    to: Number(widgetSettingRow.modelData.maxRows)
+                                    onValueRequested: function(value) {
+                                        deskCenterPage.updateWidget(
+                                            widgetSettingRow.modelData,
+                                            { rows: value })
+                                    }
+                                }
+                                Item { Layout.fillWidth: true }
+                                Text {
+                                    text: Number(widgetSettingRow.modelData.columns)
+                                        + " × " + Number(widgetSettingRow.modelData.rows)
+                                    color: theme.secondaryText
+                                    font.pixelSize: 12
+                                }
+                            }
+                        }
+
+                        Item {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            height: 46
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 56
+                                anchors.rightMargin: 16
+                                spacing: 10
+                                enabled: widgetSettingRow.modelData.enabled
+
+                                Text {
+                                    text: "位置"
+                                    color: theme.secondaryText
+                                    font.pixelSize: 12
+                                    Layout.preferredWidth: 40
+                                }
+                                Text {
+                                    text: "自动排布"
+                                    color: theme.primaryText
+                                    font.pixelSize: 12
+                                }
+                                LiquidControls.LiquidGlassSwitch {
+                                    checked: Boolean(widgetSettingRow.modelData.automatic)
+                                    accentColor: "#0a84ff"
+                                    trackColor: theme.divider
+                                    onToggled: function(checked) {
+                                        deskCenterPage.updateWidget(
+                                            widgetSettingRow.modelData,
+                                            { automatic: checked })
+                                    }
+                                }
+                                Item { Layout.fillWidth: true }
+                                Text {
+                                    visible: !widgetSettingRow.modelData.automatic
+                                    text: "列"
+                                    color: theme.tertiaryText
+                                    font.pixelSize: 11
+                                }
+                                CompactStepper {
+                                    visible: !widgetSettingRow.modelData.automatic
+                                    value: Number(widgetSettingRow.modelData.column)
+                                    from: 0
+                                    to: Math.max(0, deskCenterPage.widgetColumns
+                                        - Number(widgetSettingRow.modelData.columns))
+                                    onValueRequested: function(value) {
+                                        deskCenterPage.updateWidget(
+                                            widgetSettingRow.modelData,
+                                            { column: value })
+                                    }
+                                }
+                                Text {
+                                    visible: !widgetSettingRow.modelData.automatic
+                                    text: "行"
+                                    color: theme.tertiaryText
+                                    font.pixelSize: 11
+                                }
+                                CompactStepper {
+                                    visible: !widgetSettingRow.modelData.automatic
+                                    value: Number(widgetSettingRow.modelData.row)
+                                    from: 0
+                                    to: 19
+                                    onValueRequested: function(value) {
+                                        deskCenterPage.updateWidget(
+                                            widgetSettingRow.modelData,
+                                            { row: value })
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.leftMargin: 53
+                            anchors.bottom: parent.bottom
+                            height: 1
+                            color: theme.separator
+                            visible: widgetSettingRow.index
+                                < deskCenterPage.widgets.length - 1
+                        }
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: "布局操作".toUpperCase()
+            color: theme.secondaryText
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            Layout.leftMargin: 13
+            Layout.topMargin: 14
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: 62
+            radius: 18
+            color: theme.card
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                spacing: 10
+
+                Button {
+                    text: "应用到所有显示器"
+                    onClicked: deskCenterPage.copyToAllScreens()
+                }
+                Item { Layout.fillWidth: true }
+                Button {
+                    text: "重置当前显示器"
+                    onClicked: deskCenterPage.resetScreen()
+                }
+                Button {
+                    text: "重置全部"
+                    onClicked: deskCenterPage.resetAll()
+                }
+            }
+        }
+
+        Text {
+            Layout.fillWidth: true
+            Layout.leftMargin: 13
+            Layout.rightMargin: 13
+            visible: deskCenterPage.errorText.length > 0
+            text: deskCenterPage.errorText
+            color: "#ff453a"
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+        }
+    }
+
     Item {
         anchors.fill: parent
 
@@ -2715,6 +3307,15 @@ ApplicationWindow {
                     navTint: "#ff9500"
                 }
 
+                SidebarEntry {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 1
+                    pageIndex: 5
+                    label: "桌面"
+                    navSymbol: "▦"
+                    navTint: "#30d158"
+                }
+
                 Item {
                     Layout.fillHeight: true
                 }
@@ -2757,7 +3358,7 @@ ApplicationWindow {
                         Layout.bottomMargin: 18
                     }
                     Repeater {
-                        model: (window.currentPage >= 0 && window.currentPage <= 4)
+                        model: (window.currentPage >= 0 && window.currentPage <= 5)
                             ? [] : window.contentByPage[window.currentPage].groups
                         delegate: ColumnLayout {
                             required property var modelData
@@ -2790,6 +3391,10 @@ ApplicationWindow {
 
                     LauncherSettingsPage {
                         visible: window.currentPage === 4
+                    }
+
+                    DeskCenterSettingsPage {
+                        visible: window.currentPage === 5
                     }
 
                     DockSettingsPage {
