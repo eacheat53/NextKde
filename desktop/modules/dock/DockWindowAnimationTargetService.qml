@@ -199,10 +199,46 @@ QtObject {
         }
     }
 
+    // Same crash-restart leak guard as the clipboard watchers: a crashed and
+    // internally restarted engine leaves the previous generation's gdbus
+    // monitor alive, so KWin animation signals would be consumed once per
+    // leaked monitor. Only monitors stamped with this generation's token may
+    // live; stale ones hanging off this quickshell process or the user
+    // manager are killed at startup.
+    readonly property string monitorToken: "qsdock-"
+        + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36)
+
+    function reapLeakedMonitors() {
+        // The bracketed [ ] class keeps pgrep's pattern from matching this
+        // script's own command line, which embeds the pattern text.
+        const script = "token=$1\n"
+            + "user=$(id -u)\n"
+            + "parent=$(awk '{print $4}' \"/proc/$$/stat\")\n"
+            + "manager=$(pgrep -u \"$user\" -x systemd | head -n 1)\n"
+            + "for pid in $(pgrep -u \"$user\" -f 'gdbus .*--object-path[ ]/KOSDockWindowAnimation'); do\n"
+            + "  [ \"$pid\" = \"$$\" ] && continue\n"
+            + "  tr '\\0' '\\n' < \"/proc/$pid/environ\" 2>/dev/null | grep -q \"^QS_DOCK_ANIM_TOKEN=$token$\" && continue\n"
+            + "  owner=$(awk '{print $4}' \"/proc/$pid/stat\" 2>/dev/null)\n"
+            + "  if [ \"$owner\" = \"$parent\" ] || { [ -n \"$manager\" ] && [ \"$owner\" = \"$manager\" ]; }; then\n"
+            + "    kill \"$pid\" 2>/dev/null && echo \"reaped $pid\"\n"
+            + "  fi\n"
+            + "done\n"
+            + "exit 0"
+        const proc = processFactory.createObject(service, {
+            command: ["sh", "-c", script, "dock-anim-reap-leaked", monitorToken]
+        })
+        proc.exited.connect(function(code) {
+            if ((proc.stdout?.text ?? "").trim())
+                console.warn("[DockAnimation] " + proc.stdout.text.trim())
+            proc.destroy()
+        })
+        proc.running = true
+    }
+
     property Process animationMonitor: Process {
-        command: ["gdbus", "monitor", "--session",
-            "--dest", "org.kde.KWin",
-            "--object-path", "/KOSDockWindowAnimation"]
+        command: ["sh", "-c",
+            "export QS_DOCK_ANIM_TOKEN=\"$1\"; exec gdbus monitor --session --dest org.kde.KWin --object-path /KOSDockWindowAnimation",
+            "dock-animation-monitor", service.monitorToken]
         running: service._animationMonitorEnabled
         stdout: SplitParser {
             splitMarker: "\n"
@@ -227,4 +263,6 @@ QtObject {
             stderr: StdioCollector {}
         }
     }
+
+    Component.onCompleted: reapLeakedMonitors()
 }

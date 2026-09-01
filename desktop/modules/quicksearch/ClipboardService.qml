@@ -22,7 +22,9 @@ QtObject {
     // the original Wayland MIME type instead of turning image entries into a
     // filename or text preview.
     property Process textHistoryWatcher: Process {
-        command: ["wl-paste", "--type", "text", "--watch", "cliphist", "store"]
+        command: ["sh", "-c",
+            "export QS_CLIP_WATCHER_TOKEN=\"$1\"; exec wl-paste --type text --watch cliphist store",
+            "clipboard-text-watcher", service.watcherToken]
         running: true
         stderr: SplitParser {
             splitMarker: "\n"
@@ -30,12 +32,52 @@ QtObject {
         }
     }
     property Process imageHistoryWatcher: Process {
-        command: ["wl-paste", "--type", "image", "--watch", "cliphist", "store"]
+        command: ["sh", "-c",
+            "export QS_CLIP_WATCHER_TOKEN=\"$1\"; exec wl-paste --type image --watch cliphist store",
+            "clipboard-image-watcher", service.watcherToken]
         running: service.watchImages
         stderr: SplitParser {
             splitMarker: "\n"
             onRead: data => console.warn("[Clipboard] image watcher: " + data)
         }
+    }
+
+    // Crash-restart leak guard. Quickshell's post-crash relaunch does not reap
+    // the previous engine generation's running Process children, so every
+    // engine crash leaks another pair of wl-paste watchers; each clipboard
+    // change is then stored once per leaked watcher and the concurrent writes
+    // defeat cliphist's dedupe. Each engine generation stamps its watchers
+    // with this token; at startup anything matching the watcher command
+    // without it, still parented to this quickshell process (crash leak) or
+    // to the user manager (orphan of a dead dev instance), is killed.
+    readonly property string watcherToken: "qsclip-"
+        + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36)
+
+    function reapLeakedWatchers() {
+        // The bracketed [ ] classes keep pgrep's pattern from matching this
+        // script's own command line, which embeds the pattern text.
+        const script = "token=$1\n"
+            + "user=$(id -u)\n"
+            + "parent=$(awk '{print $4}' \"/proc/$$/stat\")\n"
+            + "manager=$(pgrep -u \"$user\" -x systemd | head -n 1)\n"
+            + "for pid in $(pgrep -u \"$user\" -f 'wl-paste .*--watch[ ]cliphist[ ]store'); do\n"
+            + "  [ \"$pid\" = \"$$\" ] && continue\n"
+            + "  tr '\\0' '\\n' < \"/proc/$pid/environ\" 2>/dev/null | grep -q \"^QS_CLIP_WATCHER_TOKEN=$token$\" && continue\n"
+            + "  owner=$(awk '{print $4}' \"/proc/$pid/stat\" 2>/dev/null)\n"
+            + "  if [ \"$owner\" = \"$parent\" ] || { [ -n \"$manager\" ] && [ \"$owner\" = \"$manager\" ]; }; then\n"
+            + "    kill \"$pid\" 2>/dev/null && echo \"reaped $pid\"\n"
+            + "  fi\n"
+            + "done\n"
+            + "exit 0"
+        const proc = processFactory.createObject(service, {
+            command: ["sh", "-c", script, "clipboard-reap-leaked", watcherToken]
+        })
+        proc.exited.connect(function(code) {
+            if ((proc.stdout?.text ?? "").trim())
+                console.warn("[Clipboard] " + proc.stdout.text.trim())
+            proc.destroy()
+        })
+        proc.running = true
     }
 
     function setWatchImages(enabled) {
@@ -214,6 +256,7 @@ QtObject {
     }
 
     Component.onCompleted: {
+        reapLeakedWatchers()
         load()
         refresh()
     }
