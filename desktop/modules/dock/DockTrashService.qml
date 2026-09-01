@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell.Io
+import qs.desktop.modules.common
 
 // The Dock owns the destructive empty action.  Desktop file deletion itself
 // remains recoverable (gio trash); only this explicit confirmation purges it.
@@ -31,10 +32,13 @@ QtObject {
 
     function open() {
         refreshContentState()
+        // The file manager must leave the shell's cgroup (see
+        // AppActionService.scopedCommand); otherwise a shell restart would
+        // also kill this Dolphin window.
         const process = processFactory.createObject(service, {
             // KDE exposes its Trash view as trash:/; the local GIO backend
             // does not implement the cross-desktop trash:/// URI here.
-            command: ["dolphin", "trash:/"]
+            command: AppActionService.scopedCommand(["dolphin", "trash:/"], "org.kde.dolphin")
         })
         process.exited.connect(function() { process.destroy() })
         process.running = true
